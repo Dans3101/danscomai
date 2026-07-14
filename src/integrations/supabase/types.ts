@@ -14,7 +14,468 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      account_snapshots: {
+        Row: {
+          account_id: string
+          balance: number | null
+          captured_at: string
+          currency: string | null
+          equity: number | null
+          free_margin: number | null
+          id: number
+          margin: number | null
+          margin_level: number | null
+          profit: number | null
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          balance?: number | null
+          captured_at?: string
+          currency?: string | null
+          equity?: number | null
+          free_margin?: number | null
+          id?: number
+          margin?: number | null
+          margin_level?: number | null
+          profit?: number | null
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          balance?: number | null
+          captured_at?: string
+          currency?: string | null
+          equity?: number | null
+          free_margin?: number | null
+          id?: number
+          margin?: number | null
+          margin_level?: number | null
+          profit?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_snapshots_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_logs: {
+        Row: {
+          account_id: string | null
+          created_at: string
+          data: Json | null
+          id: number
+          level: string
+          message: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          created_at?: string
+          data?: Json | null
+          id?: number
+          level?: string
+          message: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          created_at?: string
+          data?: Json | null
+          id?: number
+          level?: string
+          message?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bridge_commands: {
+        Row: {
+          account_id: string
+          command: string
+          created_at: string
+          id: string
+          payload: Json
+          processed_at: string | null
+          result: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          command: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          result?: Json | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          command?: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          processed_at?: string | null
+          result?: Json | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bridge_commands_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mt5_accounts: {
+        Row: {
+          bridge_token: string | null
+          bridge_url: string | null
+          broker: string
+          connection_status: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          last_seen_at: string | null
+          login: string
+          password_ciphertext: string
+          server: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bridge_token?: string | null
+          bridge_url?: string | null
+          broker: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          last_seen_at?: string | null
+          login: string
+          password_ciphertext: string
+          server: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bridge_token?: string | null
+          bridge_url?: string | null
+          broker?: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_seen_at?: string | null
+          login?: string
+          password_ciphertext?: string
+          server?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pending_orders: {
+        Row: {
+          account_id: string
+          id: string
+          placed_at: string | null
+          price: number | null
+          stop_loss: number | null
+          symbol: string
+          take_profit: number | null
+          ticket: number
+          type: string
+          updated_at: string
+          user_id: string
+          volume: number
+        }
+        Insert: {
+          account_id: string
+          id?: string
+          placed_at?: string | null
+          price?: number | null
+          stop_loss?: number | null
+          symbol: string
+          take_profit?: number | null
+          ticket: number
+          type: string
+          updated_at?: string
+          user_id: string
+          volume: number
+        }
+        Update: {
+          account_id?: string
+          id?: string
+          placed_at?: string | null
+          price?: number | null
+          stop_loss?: number | null
+          symbol?: string
+          take_profit?: number | null
+          ticket?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+          volume?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_orders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      positions: {
+        Row: {
+          account_id: string
+          current_price: number | null
+          id: string
+          open_price: number | null
+          opened_at: string | null
+          profit: number | null
+          side: string
+          stop_loss: number | null
+          swap: number | null
+          symbol: string
+          take_profit: number | null
+          ticket: number
+          updated_at: string
+          user_id: string
+          volume: number
+        }
+        Insert: {
+          account_id: string
+          current_price?: number | null
+          id?: string
+          open_price?: number | null
+          opened_at?: string | null
+          profit?: number | null
+          side: string
+          stop_loss?: number | null
+          swap?: number | null
+          symbol: string
+          take_profit?: number | null
+          ticket: number
+          updated_at?: string
+          user_id: string
+          volume: number
+        }
+        Update: {
+          account_id?: string
+          current_price?: number | null
+          id?: string
+          open_price?: number | null
+          opened_at?: string | null
+          profit?: number | null
+          side?: string
+          stop_loss?: number | null
+          swap?: number | null
+          symbol?: string
+          take_profit?: number | null
+          ticket?: number
+          updated_at?: string
+          user_id?: string
+          volume?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      strategies: {
+        Row: {
+          account_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          lot_size: number
+          max_daily_loss: number | null
+          max_open_trades: number
+          name: string
+          rule_params: Json
+          rule_type: string
+          stop_loss_pips: number | null
+          symbol: string
+          take_profit_pips: number | null
+          timeframe: string
+          trailing_stop_pips: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          lot_size?: number
+          max_daily_loss?: number | null
+          max_open_trades?: number
+          name: string
+          rule_params?: Json
+          rule_type: string
+          stop_loss_pips?: number | null
+          symbol: string
+          take_profit_pips?: number | null
+          timeframe?: string
+          trailing_stop_pips?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          lot_size?: number
+          max_daily_loss?: number | null
+          max_open_trades?: number
+          name?: string
+          rule_params?: Json
+          rule_type?: string
+          stop_loss_pips?: number | null
+          symbol?: string
+          take_profit_pips?: number | null
+          timeframe?: string
+          trailing_stop_pips?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategies_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trade_history: {
+        Row: {
+          account_id: string
+          close_price: number | null
+          closed_at: string | null
+          commission: number | null
+          created_at: string
+          id: string
+          open_price: number | null
+          opened_at: string | null
+          profit: number | null
+          side: string
+          strategy_id: string | null
+          swap: number | null
+          symbol: string
+          ticket: number
+          user_id: string
+          volume: number
+        }
+        Insert: {
+          account_id: string
+          close_price?: number | null
+          closed_at?: string | null
+          commission?: number | null
+          created_at?: string
+          id?: string
+          open_price?: number | null
+          opened_at?: string | null
+          profit?: number | null
+          side: string
+          strategy_id?: string | null
+          swap?: number | null
+          symbol: string
+          ticket: number
+          user_id: string
+          volume: number
+        }
+        Update: {
+          account_id?: string
+          close_price?: number | null
+          closed_at?: string | null
+          commission?: number | null
+          created_at?: string
+          id?: string
+          open_price?: number | null
+          opened_at?: string | null
+          profit?: number | null
+          side?: string
+          strategy_id?: string | null
+          swap?: number | null
+          symbol?: string
+          ticket?: number
+          user_id?: string
+          volume?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_history_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trade_history_strategy_id_fkey"
+            columns: ["strategy_id"]
+            isOneToOne: false
+            referencedRelation: "strategies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
