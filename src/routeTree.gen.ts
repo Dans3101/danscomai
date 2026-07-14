@@ -9,38 +9,152 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedStrategiesRouteImport } from './routes/_authenticated/strategies'
+import { Route as AuthenticatedLogsRouteImport } from './routes/_authenticated/logs'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
+import { Route as ApiPublicBridgeHeartbeatRouteImport } from './routes/api/public/bridge/heartbeat'
+import { Route as ApiPublicBridgeCommandsRouteImport } from './routes/api/public/bridge/commands'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedStrategiesRoute = AuthenticatedStrategiesRouteImport.update({
+  id: '/strategies',
+  path: '/strategies',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLogsRoute = AuthenticatedLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAccountsRoute = AuthenticatedAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiPublicBridgeHeartbeatRoute =
+  ApiPublicBridgeHeartbeatRouteImport.update({
+    id: '/api/public/bridge/heartbeat',
+    path: '/api/public/bridge/heartbeat',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicBridgeCommandsRoute = ApiPublicBridgeCommandsRouteImport.update({
+  id: '/api/public/bridge/commands',
+  path: '/api/public/bridge/commands',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/accounts': typeof AuthenticatedAccountsRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/logs': typeof AuthenticatedLogsRoute
+  '/strategies': typeof AuthenticatedStrategiesRoute
+  '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
+  '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/accounts': typeof AuthenticatedAccountsRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/logs': typeof AuthenticatedLogsRoute
+  '/strategies': typeof AuthenticatedStrategiesRoute
+  '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
+  '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/_authenticated/accounts': typeof AuthenticatedAccountsRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/logs': typeof AuthenticatedLogsRoute
+  '/_authenticated/strategies': typeof AuthenticatedStrategiesRoute
+  '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
+  '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/accounts'
+    | '/dashboard'
+    | '/logs'
+    | '/strategies'
+    | '/api/public/bridge/commands'
+    | '/api/public/bridge/heartbeat'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/accounts'
+    | '/dashboard'
+    | '/logs'
+    | '/strategies'
+    | '/api/public/bridge/commands'
+    | '/api/public/bridge/heartbeat'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/accounts'
+    | '/_authenticated/dashboard'
+    | '/_authenticated/logs'
+    | '/_authenticated/strategies'
+    | '/api/public/bridge/commands'
+    | '/api/public/bridge/heartbeat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  ApiPublicBridgeCommandsRoute: typeof ApiPublicBridgeCommandsRoute
+  ApiPublicBridgeHeartbeatRoute: typeof ApiPublicBridgeHeartbeatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +162,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/strategies': {
+      id: '/_authenticated/strategies'
+      path: '/strategies'
+      fullPath: '/strategies'
+      preLoaderRoute: typeof AuthenticatedStrategiesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/logs': {
+      id: '/_authenticated/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof AuthenticatedLogsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/accounts': {
+      id: '/_authenticated/accounts'
+      path: '/accounts'
+      fullPath: '/accounts'
+      preLoaderRoute: typeof AuthenticatedAccountsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/bridge/heartbeat': {
+      id: '/api/public/bridge/heartbeat'
+      path: '/api/public/bridge/heartbeat'
+      fullPath: '/api/public/bridge/heartbeat'
+      preLoaderRoute: typeof ApiPublicBridgeHeartbeatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/bridge/commands': {
+      id: '/api/public/bridge/commands'
+      path: '/api/public/bridge/commands'
+      fullPath: '/api/public/bridge/commands'
+      preLoaderRoute: typeof ApiPublicBridgeCommandsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAccountsRoute: typeof AuthenticatedAccountsRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedLogsRoute: typeof AuthenticatedLogsRoute
+  AuthenticatedStrategiesRoute: typeof AuthenticatedStrategiesRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAccountsRoute: AuthenticatedAccountsRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedLogsRoute: AuthenticatedLogsRoute,
+  AuthenticatedStrategiesRoute: AuthenticatedStrategiesRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
+  ApiPublicBridgeCommandsRoute: ApiPublicBridgeCommandsRoute,
+  ApiPublicBridgeHeartbeatRoute: ApiPublicBridgeHeartbeatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
