@@ -20,7 +20,10 @@ export const saveMt5Account = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
 
     if (data.id) {
-      const patch: Record<string, unknown> = {
+      const patch: {
+        label: string; broker: string; login: string; server: string;
+        bridge_url: string | null; password_ciphertext?: string;
+      } = {
         label: data.label,
         broker: data.broker,
         login: data.login,
