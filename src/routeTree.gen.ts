@@ -17,6 +17,7 @@ import { Route as AuthenticatedStrategiesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedLogsRouteImport } from './routes/_authenticated/logs'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
+import { Route as ApiPublicBridgeStrategiesRouteImport } from './routes/api/public/bridge/strategies'
 import { Route as ApiPublicBridgeHeartbeatRouteImport } from './routes/api/public/bridge/heartbeat'
 import { Route as ApiPublicBridgeCommandsRouteImport } from './routes/api/public/bridge/commands'
 
@@ -59,6 +60,12 @@ const AuthenticatedAccountsRoute = AuthenticatedAccountsRouteImport.update({
   path: '/accounts',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicBridgeStrategiesRoute =
+  ApiPublicBridgeStrategiesRouteImport.update({
+    id: '/api/public/bridge/strategies',
+    path: '/api/public/bridge/strategies',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicBridgeHeartbeatRoute =
   ApiPublicBridgeHeartbeatRouteImport.update({
     id: '/api/public/bridge/heartbeat',
@@ -81,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/strategies': typeof AuthenticatedStrategiesRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
+  '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -92,6 +100,7 @@ export interface FileRoutesByTo {
   '/strategies': typeof AuthenticatedStrategiesRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
+  '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -105,6 +114,7 @@ export interface FileRoutesById {
   '/_authenticated/strategies': typeof AuthenticatedStrategiesRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
+  '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/strategies'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
+    | '/api/public/bridge/strategies'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/strategies'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
+    | '/api/public/bridge/strategies'
   id:
     | '__root__'
     | '/'
@@ -141,6 +153,7 @@ export interface FileRouteTypes {
     | '/_authenticated/strategies'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
+    | '/api/public/bridge/strategies'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -150,6 +163,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiPublicBridgeCommandsRoute: typeof ApiPublicBridgeCommandsRoute
   ApiPublicBridgeHeartbeatRoute: typeof ApiPublicBridgeHeartbeatRoute
+  ApiPublicBridgeStrategiesRoute: typeof ApiPublicBridgeStrategiesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -210,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/bridge/strategies': {
+      id: '/api/public/bridge/strategies'
+      path: '/api/public/bridge/strategies'
+      fullPath: '/api/public/bridge/strategies'
+      preLoaderRoute: typeof ApiPublicBridgeStrategiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/bridge/heartbeat': {
       id: '/api/public/bridge/heartbeat'
       path: '/api/public/bridge/heartbeat'
@@ -251,6 +272,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiPublicBridgeCommandsRoute: ApiPublicBridgeCommandsRoute,
   ApiPublicBridgeHeartbeatRoute: ApiPublicBridgeHeartbeatRoute,
+  ApiPublicBridgeStrategiesRoute: ApiPublicBridgeStrategiesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
