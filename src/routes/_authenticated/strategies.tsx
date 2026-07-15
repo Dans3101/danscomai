@@ -21,6 +21,30 @@ const RULE_TYPES = [
   { value: "ma_crossover", label: "MA Crossover", params: [{ k: "fast", d: 9 }, { k: "slow", d: 21 }] },
   { value: "rsi", label: "RSI Overbought/Oversold", params: [{ k: "period", d: 14 }, { k: "oversold", d: 30 }, { k: "overbought", d: 70 }] },
   { value: "breakout", label: "Range Breakout", params: [{ k: "lookback", d: 20 }] },
+  {
+    value: "smc_confluence",
+    label: "SMC Confluence (45-rule)",
+    params: [
+      { k: "ema_period", d: 200 },
+      { k: "rsi_buy_min", d: 55 },
+      { k: "rsi_sell_max", d: 45 },
+      { k: "atr_period", d: 14 },
+      { k: "atr_min_pips", d: 5 },
+      { k: "atr_max_pips", d: 80 },
+      { k: "vol_lookback", d: 20 },
+      { k: "bos_lookback", d: 20 },
+      { k: "sweep_lookback", d: 10 },
+      { k: "min_rr", d: 3 },
+      { k: "max_spread_pips", d: 3 },
+      { k: "min_confidence", d: 85 },
+      { k: "cooldown_min", d: 15 },
+      { k: "breakeven_rr", d: 1 },
+      { k: "trailing_rr", d: 1.5 },
+      { k: "max_hold_min", d: 240 },
+      { k: "session_london", d: 1 },
+      { k: "session_ny", d: 1 },
+    ],
+  },
 ] as const;
 
 function StrategiesPage() {
