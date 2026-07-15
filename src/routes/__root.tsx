@@ -81,10 +81,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "MT5 AutoTrader — AI-powered MetaTrader 5 dashboard" },
       { name: "description", content: "Connect your MetaTrader 5 account and run automated, rule-based trading strategies with live risk controls and real-time monitoring." },
-      { property: "og:title", content: "MT5 AutoTrader" },
-      { property: "og:description", content: "Automated MetaTrader 5 trading with a modern, secure dashboard." },
+      { property: "og:title", content: "MT5 AutoTrader — AI-powered MetaTrader 5 dashboard" },
+      { property: "og:description", content: "Connect your MetaTrader 5 account and run automated, rule-based trading strategies with live risk controls and real-time monitoring." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "MT5 AutoTrader — AI-powered MetaTrader 5 dashboard" },
+      { name: "twitter:description", content: "Connect your MetaTrader 5 account and run automated, rule-based trading strategies with live risk controls and real-time monitoring." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/62b3ad36-0b25-4db8-b083-6c229ffbd25a/id-preview-1804010e--27897aa2-583e-44f9-bfad-3e84c06132c5.lovable.app-1784097511854.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/62b3ad36-0b25-4db8-b083-6c229ffbd25a/id-preview-1804010e--27897aa2-583e-44f9-bfad-3e84c06132c5.lovable.app-1784097511854.png" },
     ],
     links: [
       {
