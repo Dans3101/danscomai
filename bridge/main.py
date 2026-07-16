@@ -14,9 +14,10 @@ from __future__ import annotations
 import os
 import sys
 import time
-import json
 import logging
+import threading
 from datetime import datetime, timezone, time as dtime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -24,17 +25,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+log = logging.getLogger("bridge")
+
 APP = os.environ["APP_BASE_URL"].rstrip("/")
 ACCOUNT_ID = os.environ["ACCOUNT_ID"]
 TOKEN = os.environ["BRIDGE_TOKEN"]
-LOGIN = int(os.environ["MT5_LOGIN"])
-PASSWORD = os.environ["MT5_PASSWORD"]
-SERVER = os.environ["MT5_SERVER"]
+LOGIN = int(os.environ.get("MT5_LOGIN") or 0)
+PASSWORD = os.environ.get("MT5_PASSWORD", "")
+SERVER = os.environ.get("MT5_SERVER", "")
 MT5_PATH = os.environ.get("MT5_PATH") or None
 POLL = float(os.environ.get("POLL_SECONDS", "2"))
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("bridge")
+HEALTH_FILE = Path(os.environ.get("HEALTH_FILE", "/tmp/mt5-bridge.health"))
+MAX_RECONNECT_DELAY = float(os.environ.get("MAX_RECONNECT_DELAY", "60"))
 
 HB_URL = f"{APP}/api/public/bridge/heartbeat"
 CMD_URL = f"{APP}/api/public/bridge/commands"
@@ -46,11 +52,19 @@ _STATE: dict[str, dict[str, Any]] = {}
 _DAY_KEY: str = ""
 _DAY_STATS: dict[str, Any] = {"trades": 0, "pnl": 0.0, "losses_streak": 0}
 
-try:
-    import MetaTrader5 as mt5  # type: ignore
-except ImportError:
-    log.error("MetaTrader5 module unavailable — this bridge must run on Windows.")
-    sys.exit(1)
+# Pluggable MT5 backend: native (Windows), mt5linux (Ubuntu+Wine), simulator.
+# See bridge/mt5_client.py.
+sys.path.insert(0, str(Path(__file__).parent))
+from mt5_client import mt5, BACKEND  # noqa: E402
+
+log.info("bridge starting — backend=%s account=%s", BACKEND, ACCOUNT_ID)
+
+
+def _touch_health(status: str = "ok") -> None:
+    try:
+        HEALTH_FILE.write_text(f"{int(time.time())} {status} {BACKEND}\n")
+    except Exception:
+        pass
 
 
 def iso(ts: float | None) -> str | None:
@@ -60,13 +74,34 @@ def iso(ts: float | None) -> str | None:
 
 
 def connect_mt5() -> bool:
-    kwargs: dict[str, Any] = {"login": LOGIN, "password": PASSWORD, "server": SERVER}
+    """Initialize the selected MT5 backend.
+
+    - native: launches / attaches to the local MT5 terminal on Windows.
+    - mt5linux: calls the RPyC server running inside Wine which in turn
+      talks to the MT5 terminal. Requires the mt5linux server to be up.
+    - simulator: no-op init that always succeeds.
+    """
+    kwargs: dict[str, Any] = {}
+    if LOGIN:
+        kwargs["login"] = LOGIN
+    if PASSWORD:
+        kwargs["password"] = PASSWORD
+    if SERVER:
+        kwargs["server"] = SERVER
     if MT5_PATH:
         kwargs["path"] = MT5_PATH
-    if not mt5.initialize(**kwargs):
-        log.error("MT5 initialize failed: %s", mt5.last_error())
+    try:
+        ok = bool(mt5.initialize(**kwargs))
+    except Exception as e:  # noqa: BLE001
+        log.error("MT5 initialize raised: %s", e)
         return False
-    log.info("Connected to MT5 %s @ %s", LOGIN, SERVER)
+    if not ok:
+        try:
+            log.error("MT5 initialize failed: %s", mt5.last_error())
+        except Exception:
+            log.error("MT5 initialize failed")
+        return False
+    log.info("Connected to MT5 %s @ %s (backend=%s)", LOGIN or "sim", SERVER or "-", BACKEND)
     return True
 
 
