@@ -1,4 +1,9 @@
+# Runtime deps for the bridge process.
+# Linux: talks to MT5 through mt5linux (RPyC to Wine).
+# Windows: uses the official MetaTrader5 package directly.
 MetaTrader5>=5.0.45 ; sys_platform == "win32"
+mt5linux>=0.1.9    ; sys_platform != "win32"
+rpyc>=5.3          ; sys_platform != "win32"
 httpx>=0.27
 python-dotenv>=1.0
 pydantic>=2.7

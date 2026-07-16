@@ -1,0 +1,19 @@
+# Local / VPS deployment via docker compose.
+#   docker compose --env-file .env up -d
+services:
+  mt5-bridge:
+    build: .
+    image: mt5-bridge:latest
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - wine-prefix:/home/mt5/.wine-mt5
+    healthcheck:
+      test: ["CMD", "bash", "scripts/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+volumes:
+  wine-prefix:
