@@ -674,10 +674,24 @@ def poll_commands(client: httpx.Client) -> None:
         log.warning("commands error: %s", e)
 
 
+def _reconnect_loop() -> None:
+    delay = 2.0
+    while True:
+        try:
+            mt5.shutdown()
+        except Exception:
+            pass
+        if connect_mt5():
+            return
+        _touch_health("reconnecting")
+        log.info("Retrying MT5 connect in %.0fs…", delay)
+        time.sleep(delay)
+        delay = min(delay * 1.7, MAX_RECONNECT_DELAY)
+
+
 def main() -> None:
-    while not connect_mt5():
-        log.info("Retrying MT5 connect in 5s…")
-        time.sleep(5)
+    _reconnect_loop()
+    _touch_health("ok")
 
     with httpx.Client() as client:
         while True:
@@ -685,12 +699,27 @@ def main() -> None:
                 post_heartbeat(client, collect_state())
                 poll_commands(client)
                 evaluate_strategies()
+                _touch_health("ok")
+            except KeyboardInterrupt:
+                log.info("shutting down")
+                try:
+                    mt5.shutdown()
+                except Exception:
+                    pass
+                return
             except Exception as e:
                 log.exception("loop error: %s", e)
-                # Try to reconnect on hard failure.
-                mt5.shutdown()
-                while not connect_mt5():
-                    time.sleep(5)
+                _touch_health("degraded")
+                # Best-effort disconnected marker for the dashboard.
+                try:
+                    client.post(
+                        HB_URL, headers=HDRS,
+                        json={"account_id": ACCOUNT_ID, "connection_status": "error"},
+                        timeout=5,
+                    )
+                except Exception:
+                    pass
+                _reconnect_loop()
             time.sleep(POLL)
 
 
