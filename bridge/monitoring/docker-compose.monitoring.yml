@@ -1,0 +1,31 @@
+# Prometheus + Grafana on the same VPS as the bridge.
+#   docker compose -f docker-compose.monitoring.yml up -d
+# Grafana:    http://<vps-ip>:3000  (admin / admin — change on first login)
+# Prometheus: http://<vps-ip>:9090
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana-provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+
+volumes:
+  prom-data:
+  grafana-data:
