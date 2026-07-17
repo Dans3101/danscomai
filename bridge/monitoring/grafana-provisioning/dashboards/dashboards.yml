@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: mt5-bridge
+    folder: MT5
+    type: file
+    disableDeletion: true
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
