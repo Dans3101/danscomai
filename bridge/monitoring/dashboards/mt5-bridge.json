@@ -1,0 +1,42 @@
+{
+  "title": "MT5 Bridge",
+  "uid": "mt5-bridge",
+  "schemaVersion": 39,
+  "timezone": "",
+  "refresh": "10s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {"list": [
+    {"name": "account_id", "type": "query", "datasource": "Prometheus",
+     "query": "label_values(mt5_bridge_up, account_id)", "includeAll": true, "multi": true, "current": {"selected": true, "text": "All", "value": "$__all"}}
+  ]},
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Bridge up", "gridPos": {"x":0,"y":0,"w":4,"h":4},
+     "targets": [{"expr": "max(mt5_bridge_up{account_id=~\"$account_id\"})"}],
+     "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]}}},
+    {"id": 2, "type": "stat", "title": "MT5 connected", "gridPos": {"x":4,"y":0,"w":4,"h":4},
+     "targets": [{"expr": "max(mt5_connected{account_id=~\"$account_id\"})"}]},
+    {"id": 3, "type": "stat", "title": "Open positions", "gridPos": {"x":8,"y":0,"w":4,"h":4},
+     "targets": [{"expr": "sum(mt5_open_positions{account_id=~\"$account_id\"})"}]},
+    {"id": 4, "type": "stat", "title": "Equity", "gridPos": {"x":12,"y":0,"w":6,"h":4},
+     "targets": [{"expr": "sum(mt5_account_equity{account_id=~\"$account_id\"})"}]},
+    {"id": 5, "type": "stat", "title": "Floating P/L", "gridPos": {"x":18,"y":0,"w":6,"h":4},
+     "targets": [{"expr": "sum(mt5_account_profit{account_id=~\"$account_id\"})"}],
+     "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 0}]}}}},
+    {"id": 10, "type": "timeseries", "title": "Heartbeat latency (p50 / p95)", "gridPos": {"x":0,"y":4,"w":12,"h":8},
+     "targets": [
+       {"expr": "histogram_quantile(0.5, sum by (le) (rate(mt5_heartbeat_latency_seconds_bucket{account_id=~\"$account_id\"}[5m])))", "legendFormat": "p50"},
+       {"expr": "histogram_quantile(0.95, sum by (le) (rate(mt5_heartbeat_latency_seconds_bucket{account_id=~\"$account_id\"}[5m])))", "legendFormat": "p95"}
+     ]},
+    {"id": 11, "type": "timeseries", "title": "Reconnects / min", "gridPos": {"x":12,"y":4,"w":12,"h":8},
+     "targets": [{"expr": "sum(rate(mt5_reconnects_total{account_id=~\"$account_id\"}[5m])) * 60", "legendFormat": "reconnects/min"}]},
+    {"id": 20, "type": "timeseries", "title": "Heartbeats by status", "gridPos": {"x":0,"y":12,"w":12,"h":8},
+     "targets": [{"expr": "sum by (status) (rate(mt5_heartbeats_total{account_id=~\"$account_id\"}[5m]))", "legendFormat": "{{status}}"}]},
+    {"id": 21, "type": "timeseries", "title": "Account equity over time", "gridPos": {"x":12,"y":12,"w":12,"h":8},
+     "targets": [{"expr": "sum(mt5_account_equity{account_id=~\"$account_id\"})", "legendFormat": "equity"},
+                 {"expr": "sum(mt5_account_balance{account_id=~\"$account_id\"})", "legendFormat": "balance"}]},
+    {"id": 30, "type": "timeseries", "title": "Trades opened / hr by symbol", "gridPos": {"x":0,"y":20,"w":12,"h":8},
+     "targets": [{"expr": "sum by (symbol, side) (rate(mt5_trades_opened_total{account_id=~\"$account_id\"}[15m])) * 3600", "legendFormat": "{{symbol}} {{side}}"}]},
+    {"id": 31, "type": "timeseries", "title": "Commands / min by status", "gridPos": {"x":12,"y":20,"w":12,"h":8},
+     "targets": [{"expr": "sum by (command, status) (rate(mt5_commands_total{account_id=~\"$account_id\"}[5m])) * 60", "legendFormat": "{{command}} {{status}}"}]}
+  ]
+}
