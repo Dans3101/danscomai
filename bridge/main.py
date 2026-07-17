@@ -56,8 +56,10 @@ _DAY_STATS: dict[str, Any] = {"trades": 0, "pnl": 0.0, "losses_streak": 0}
 # See bridge/mt5_client.py.
 sys.path.insert(0, str(Path(__file__).parent))
 from mt5_client import mt5, BACKEND  # noqa: E402
+import metrics as M  # noqa: E402
 
 log.info("bridge starting — backend=%s account=%s", BACKEND, ACCOUNT_ID)
+_MLBL = M.start(ACCOUNT_ID, BACKEND)
 
 
 def _touch_health(status: str = "ok") -> None:
@@ -65,6 +67,7 @@ def _touch_health(status: str = "ok") -> None:
         HEALTH_FILE.write_text(f"{int(time.time())} {status} {BACKEND}\n")
     except Exception:
         pass
+    M.bridge_up.labels(**_MLBL).set(1 if status == "ok" else 0)
 
 
 def iso(ts: float | None) -> str | None:
@@ -102,6 +105,7 @@ def connect_mt5() -> bool:
             log.error("MT5 initialize failed")
         return False
     log.info("Connected to MT5 %s @ %s (backend=%s)", LOGIN or "sim", SERVER or "-", BACKEND)
+    M.mt5_connected.labels(**_MLBL).set(1)
     return True
 
 
@@ -600,6 +604,8 @@ def _evaluate_smc(s: dict[str, Any]) -> None:
     if result.get("retcode") == mt5.TRADE_RETCODE_DONE:
         st["last_trade_ts"] = time.time()
         _DAY_STATS["trades"] += 1
+        M.trades_opened.labels(**_MLBL, symbol=symbol, side=bias).inc()
+        M.strategy_signals.labels(**_MLBL, strategy=s.get("name", "?"), action="open").inc()
 
 
 def _manage_open_positions(strategies: list[dict[str, Any]]) -> None:
@@ -642,12 +648,25 @@ def _manage_open_positions(strategies: list[dict[str, Any]]) -> None:
 
 
 def post_heartbeat(client: httpx.Client, payload: dict[str, Any]) -> None:
+    snap = payload.get("snapshot") or {}
+    if snap:
+        M.account_equity.labels(**_MLBL).set(float(snap.get("equity") or 0))
+        M.account_balance.labels(**_MLBL).set(float(snap.get("balance") or 0))
+        M.account_profit.labels(**_MLBL).set(float(snap.get("profit") or 0))
+    M.open_positions.labels(**_MLBL).set(len(payload.get("positions") or []))
+    t0 = time.time()
     try:
         r = client.post(HB_URL, headers=HDRS, json=payload, timeout=10)
         if r.status_code >= 400:
             log.warning("heartbeat %s: %s", r.status_code, r.text)
+            M.heartbeats_total.labels(**_MLBL, status="error").inc()
+        else:
+            M.heartbeats_total.labels(**_MLBL, status="ok").inc()
     except Exception as e:
         log.warning("heartbeat error: %s", e)
+        M.heartbeats_total.labels(**_MLBL, status="exception").inc()
+    finally:
+        M.heartbeat_latency.labels(**_MLBL).observe(time.time() - t0)
 
 
 def poll_commands(client: httpx.Client) -> None:
@@ -659,6 +678,8 @@ def poll_commands(client: httpx.Client) -> None:
         for cmd in r.json().get("commands", []):
             log.info("executing %s", cmd["command"])
             result = execute_command(cmd)
+            failed = isinstance(result, dict) and result.get("error")
+            M.commands_total.labels(**_MLBL, command=cmd["command"], status="failed" if failed else "done").inc()
             client.post(
                 CMD_URL,
                 headers=HDRS,
@@ -677,6 +698,8 @@ def poll_commands(client: httpx.Client) -> None:
 def _reconnect_loop() -> None:
     delay = 2.0
     while True:
+        M.reconnects_total.labels(**_MLBL).inc()
+        M.mt5_connected.labels(**_MLBL).set(0)
         try:
             mt5.shutdown()
         except Exception:
