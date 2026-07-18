@@ -23,7 +23,7 @@ export function registerPwa(): void {
     return;
   }
   if (!("serviceWorker" in navigator)) return;
-  import("virtual:pwa-register").then(({ registerSW }) => {
+  import(/* @vite-ignore */ "virtual:pwa-register").then(({ registerSW }: { registerSW: (opts: { immediate: boolean }) => void }) => {
     registerSW({ immediate: true });
   }).catch(() => {});
 }
