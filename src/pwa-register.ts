@@ -23,7 +23,9 @@ export function registerPwa(): void {
     return;
   }
   if (!("serviceWorker" in navigator)) return;
-  import(/* @vite-ignore */ "virtual:pwa-register").then(({ registerSW }: { registerSW: (opts: { immediate: boolean }) => void }) => {
-    registerSW({ immediate: true });
+  const mod = "virtual:pwa-register";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (import(/* @vite-ignore */ mod) as Promise<any>).then((m) => {
+    m.registerSW?.({ immediate: true });
   }).catch(() => {});
 }
