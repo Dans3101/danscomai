@@ -605,6 +605,35 @@ def _evaluate_smc(s: dict[str, Any]) -> None:
     if confidence < float(p.get("min_confidence", 85)):
         return
 
+    # AI-powered confirmation (Lovable AI). Fails open only when the
+    # endpoint is unreachable; a returned disapproval blocks the entry.
+    ai_ctx = {
+        "timeframe": s.get("timeframe"),
+        "htf_bias": bias,
+        "ema200_side": "above" if closes[-1] > ema200 else "below",
+        "rsi": round(rsi, 2),
+        "macd_hist": round(hist[-1], 5),
+        "macd_hist_prev": round(hist[-2], 5),
+        "atr_pips": round(atr_pips, 2),
+        "spread_pips": round(spread_pips, 2),
+        "last_close": closes[-1],
+        "recent_closes": [round(c, 3) for c in closes[-10:]],
+    }
+    try:
+        ai = httpx.post(
+            AI_URL, headers=HDRS,
+            json={"account_id": ACCOUNT_ID, "symbol": symbol, "proposed_side": bias, "context": ai_ctx},
+            timeout=20,
+        ).json()
+    except Exception as e:
+        log.warning("AI analysis unreachable, proceeding: %s", e)
+        ai = {"approve": True, "confidence": 70, "bias": bias}
+    if not ai.get("approve"):
+        log.info("AI vetoed entry %s %s (bias=%s conf=%s reason=%s)",
+                 bias, symbol, ai.get("bias"), ai.get("confidence"), ai.get("reason"))
+        return
+    log.info("AI approved %s %s conf=%s", bias, symbol, ai.get("confidence"))
+
     price = tick.ask if bias == "buy" else tick.bid
     sl = price - sl_pips * pip if bias == "buy" else price + sl_pips * pip
     tp = price + tp_pips * pip if bias == "buy" else price - tp_pips * pip
