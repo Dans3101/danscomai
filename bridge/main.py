@@ -46,6 +46,16 @@ HB_URL = f"{APP}/api/public/bridge/heartbeat"
 CMD_URL = f"{APP}/api/public/bridge/commands"
 HDRS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 STRAT_URL = f"{APP}/api/public/bridge/strategies"
+AI_URL = f"{APP}/api/public/bridge/ai-analysis"
+
+# Phase 1 hard-lock: this bot only trades gold. Additional symbols will be
+# enabled in a later release.
+ALLOWED_SYMBOLS = {"XAUUSD", "GOLD", "XAUUSDm", "XAUUSD.", "XAUUSD#"}
+
+
+def _symbol_allowed(sym: str) -> bool:
+    s = (sym or "").upper()
+    return s.startswith("XAU") or s.startswith("GOLD")
 
 # In-memory per-strategy state (cooldowns, daily counters, loss streaks).
 _STATE: dict[str, dict[str, Any]] = {}
@@ -305,6 +315,9 @@ def evaluate_strategies() -> None:
 
     for s in strategies:
         if s.get("rule_type") != "smc_confluence" or not s.get("enabled"):
+            continue
+        if not _symbol_allowed(s.get("symbol", "")):
+            log.info("skipping %s: only XAUUSD is supported", s.get("symbol"))
             continue
         try:
             _evaluate_smc(s)
@@ -591,6 +604,35 @@ def _evaluate_smc(s: dict[str, Any]) -> None:
         confidence -= 5
     if confidence < float(p.get("min_confidence", 85)):
         return
+
+    # AI-powered confirmation (Lovable AI). Fails open only when the
+    # endpoint is unreachable; a returned disapproval blocks the entry.
+    ai_ctx = {
+        "timeframe": s.get("timeframe"),
+        "htf_bias": bias,
+        "ema200_side": "above" if closes[-1] > ema200 else "below",
+        "rsi": round(rsi, 2),
+        "macd_hist": round(hist[-1], 5),
+        "macd_hist_prev": round(hist[-2], 5),
+        "atr_pips": round(atr_pips, 2),
+        "spread_pips": round(spread_pips, 2),
+        "last_close": closes[-1],
+        "recent_closes": [round(c, 3) for c in closes[-10:]],
+    }
+    try:
+        ai = httpx.post(
+            AI_URL, headers=HDRS,
+            json={"account_id": ACCOUNT_ID, "symbol": symbol, "proposed_side": bias, "context": ai_ctx},
+            timeout=20,
+        ).json()
+    except Exception as e:
+        log.warning("AI analysis unreachable, proceeding: %s", e)
+        ai = {"approve": True, "confidence": 70, "bias": bias}
+    if not ai.get("approve"):
+        log.info("AI vetoed entry %s %s (bias=%s conf=%s reason=%s)",
+                 bias, symbol, ai.get("bias"), ai.get("confidence"), ai.get("reason"))
+        return
+    log.info("AI approved %s %s conf=%s", bias, symbol, ai.get("confidence"))
 
     price = tick.ask if bias == "buy" else tick.bid
     sl = price - sl_pips * pip if bias == "buy" else price + sl_pips * pip

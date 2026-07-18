@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { registerPwa } from "../pwa-register";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -89,13 +90,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:description", content: "Connect your MetaTrader 5 account and run automated, rule-based trading strategies with live risk controls and real-time monitoring." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/62b3ad36-0b25-4db8-b083-6c229ffbd25a/id-preview-1804010e--27897aa2-583e-44f9-bfad-3e84c06132c5.lovable.app-1784097511854.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/62b3ad36-0b25-4db8-b083-6c229ffbd25a/id-preview-1804010e--27897aa2-583e-44f9-bfad-3e84c06132c5.lovable.app-1784097511854.png" },
+      { name: "theme-color", content: "#0a0f17" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "DANSCOMFX" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
     ],
   }),
   shellComponent: RootShell,
@@ -123,6 +130,7 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    registerPwa();
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       router.invalidate();
