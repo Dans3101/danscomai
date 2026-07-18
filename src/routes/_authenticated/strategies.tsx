@@ -202,7 +202,17 @@ function StrategyForm({ accounts, onClose, onSaved }: { accounts: Account[]; onC
               ))}
             </select>
           </label>
-          <Field name="symbol" label="Symbol" required placeholder="EURUSD" defaultValue="EURUSD" />
+          <label className="block">
+            <span className="block text-xs text-muted-foreground mb-1">Symbol</span>
+            <input
+              name="symbol"
+              value="XAUUSD"
+              readOnly
+              aria-label="Symbol"
+              className="w-full h-10 px-3 rounded-md border border-input bg-muted text-sm text-muted-foreground cursor-not-allowed"
+            />
+            <span className="block text-[10px] text-muted-foreground mt-1">Gold only (more pairs coming soon).</span>
+          </label>
           <label className="block">
             <span className="block text-xs text-muted-foreground mb-1">Timeframe</span>
             <select name="timeframe" defaultValue="M15" className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
