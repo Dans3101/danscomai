@@ -46,6 +46,16 @@ HB_URL = f"{APP}/api/public/bridge/heartbeat"
 CMD_URL = f"{APP}/api/public/bridge/commands"
 HDRS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 STRAT_URL = f"{APP}/api/public/bridge/strategies"
+AI_URL = f"{APP}/api/public/bridge/ai-analysis"
+
+# Phase 1 hard-lock: this bot only trades gold. Additional symbols will be
+# enabled in a later release.
+ALLOWED_SYMBOLS = {"XAUUSD", "GOLD", "XAUUSDm", "XAUUSD.", "XAUUSD#"}
+
+
+def _symbol_allowed(sym: str) -> bool:
+    s = (sym or "").upper()
+    return s.startswith("XAU") or s.startswith("GOLD")
 
 # In-memory per-strategy state (cooldowns, daily counters, loss streaks).
 _STATE: dict[str, dict[str, Any]] = {}
@@ -305,6 +315,9 @@ def evaluate_strategies() -> None:
 
     for s in strategies:
         if s.get("rule_type") != "smc_confluence" or not s.get("enabled"):
+            continue
+        if not _symbol_allowed(s.get("symbol", "")):
+            log.info("skipping %s: only XAUUSD is supported", s.get("symbol"))
             continue
         try:
             _evaluate_smc(s)

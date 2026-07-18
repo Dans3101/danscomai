@@ -20,6 +20,7 @@ import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticat
 import { Route as ApiPublicBridgeStrategiesRouteImport } from './routes/api/public/bridge/strategies'
 import { Route as ApiPublicBridgeHeartbeatRouteImport } from './routes/api/public/bridge/heartbeat'
 import { Route as ApiPublicBridgeCommandsRouteImport } from './routes/api/public/bridge/commands'
+import { Route as ApiPublicBridgeAiAnalysisRouteImport } from './routes/api/public/bridge/ai-analysis'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -77,6 +78,12 @@ const ApiPublicBridgeCommandsRoute = ApiPublicBridgeCommandsRouteImport.update({
   path: '/api/public/bridge/commands',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicBridgeAiAnalysisRoute =
+  ApiPublicBridgeAiAnalysisRouteImport.update({
+    id: '/api/public/bridge/ai-analysis',
+    path: '/api/public/bridge/ai-analysis',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/logs': typeof AuthenticatedLogsRoute
   '/strategies': typeof AuthenticatedStrategiesRoute
+  '/api/public/bridge/ai-analysis': typeof ApiPublicBridgeAiAnalysisRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
   '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
@@ -98,6 +106,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/logs': typeof AuthenticatedLogsRoute
   '/strategies': typeof AuthenticatedStrategiesRoute
+  '/api/public/bridge/ai-analysis': typeof ApiPublicBridgeAiAnalysisRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
   '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
@@ -112,6 +121,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/logs': typeof AuthenticatedLogsRoute
   '/_authenticated/strategies': typeof AuthenticatedStrategiesRoute
+  '/api/public/bridge/ai-analysis': typeof ApiPublicBridgeAiAnalysisRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
   '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/logs'
     | '/strategies'
+    | '/api/public/bridge/ai-analysis'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
     | '/api/public/bridge/strategies'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/logs'
     | '/strategies'
+    | '/api/public/bridge/ai-analysis'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
     | '/api/public/bridge/strategies'
@@ -151,6 +163,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/logs'
     | '/_authenticated/strategies'
+    | '/api/public/bridge/ai-analysis'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
     | '/api/public/bridge/strategies'
@@ -161,6 +174,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiPublicBridgeAiAnalysisRoute: typeof ApiPublicBridgeAiAnalysisRoute
   ApiPublicBridgeCommandsRoute: typeof ApiPublicBridgeCommandsRoute
   ApiPublicBridgeHeartbeatRoute: typeof ApiPublicBridgeHeartbeatRoute
   ApiPublicBridgeStrategiesRoute: typeof ApiPublicBridgeStrategiesRoute
@@ -245,6 +259,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicBridgeCommandsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/bridge/ai-analysis': {
+      id: '/api/public/bridge/ai-analysis'
+      path: '/api/public/bridge/ai-analysis'
+      fullPath: '/api/public/bridge/ai-analysis'
+      preLoaderRoute: typeof ApiPublicBridgeAiAnalysisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -270,6 +291,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiPublicBridgeAiAnalysisRoute: ApiPublicBridgeAiAnalysisRoute,
   ApiPublicBridgeCommandsRoute: ApiPublicBridgeCommandsRoute,
   ApiPublicBridgeHeartbeatRoute: ApiPublicBridgeHeartbeatRoute,
   ApiPublicBridgeStrategiesRoute: ApiPublicBridgeStrategiesRoute,
