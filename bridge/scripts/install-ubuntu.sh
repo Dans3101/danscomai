@@ -15,8 +15,32 @@ BRIDGE_HOME="/home/${BRIDGE_USER}"
 BRIDGE_DIR="${BRIDGE_HOME}/mt5-bridge"
 WINEPREFIX="${BRIDGE_HOME}/.wine-mt5"
 MT5_URL="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
+# Hard caps so a stuck Wine child can never block the installer forever.
+PYWIN_INSTALL_TIMEOUT="${PYWIN_INSTALL_TIMEOUT:-600}"   # 10 min
+MT5_INSTALL_TIMEOUT="${MT5_INSTALL_TIMEOUT:-900}"       # 15 min
+WINEBOOT_TIMEOUT="${WINEBOOT_TIMEOUT:-300}"             # 5 min
 
 log() { printf '\033[1;36m[install]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[install:warn]\033[0m %s\n' "$*"; }
+
+# Run a command as the bridge user under Xvfb+Wine with a hard timeout.
+# Any non-zero exit (including timeout / GUI-installer hang) is logged
+# and swallowed so the installer keeps moving — the bridge itself
+# validates MT5 at runtime and can also run in simulator mode.
+run_wine() {
+  local timeout_s="$1"; shift
+  local label="$1"; shift
+  log "wine step: ${label} (timeout ${timeout_s}s)"
+  if sudo -u "$BRIDGE_USER" \
+       WINEPREFIX="$WINEPREFIX" WINEARCH=win64 WINEDEBUG=-all \
+       DISPLAY="" \
+       timeout --preserve-status --kill-after=30s "${timeout_s}s" \
+       xvfb-run -a -e /dev/stderr "$@"; then
+    log "wine step ok: ${label}"
+  else
+    warn "wine step '${label}' exited non-zero (continuing)"
+  fi
+}
 
 if [[ $EUID -ne 0 ]]; then
   echo "run with sudo"; exit 1
@@ -31,7 +55,7 @@ apt-get update -y
 apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg wget xvfb xauth \
   python3 python3-pip python3-venv \
-  software-properties-common cabextract unzip
+  software-properties-common cabextract unzip coreutils
 
 mkdir -p /etc/apt/keyrings
 wget -qO- https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor -o /etc/apt/keyrings/winehq-archive.key
@@ -42,18 +66,54 @@ apt-get update -y
 apt-get install -y --install-recommends winehq-stable || apt-get install -y wine wine64 wine32
 
 log "creating Wine prefix"
-sudo -u "$BRIDGE_USER" WINEPREFIX="$WINEPREFIX" WINEARCH=win64 wineboot -i || true
+install -d -o "$BRIDGE_USER" -g "$BRIDGE_USER" "$WINEPREFIX"
+run_wine "$WINEBOOT_TIMEOUT" "wineboot -i" wineboot -i
+# Wine spawns background services (wineserver, mscorsvc, etc.). Give
+# them a moment to settle so the next wine invocation doesn't race the
+# prefix bring-up and appear to hang.
+sudo -u "$BRIDGE_USER" WINEPREFIX="$WINEPREFIX" wineserver -w || true
 
 log "installing Python for Wine (needed by mt5linux server)"
 PYWIN_URL="https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
-sudo -u "$BRIDGE_USER" bash -c "cd /tmp && curl -L -o py.exe '$PYWIN_URL' && \
-  WINEPREFIX='$WINEPREFIX' xvfb-run -a wine py.exe /quiet InstallAllUsers=1 PrependPath=1 || true"
-sudo -u "$BRIDGE_USER" WINEPREFIX="$WINEPREFIX" xvfb-run -a wine python -m pip install --upgrade pip MetaTrader5 mt5linux rpyc || true
+PYWIN_EXE="/tmp/py-win-installer.exe"
+# Download as the bridge user so file perms are consistent, and do the
+# download OUTSIDE the wine timeout so slow networks don't eat the budget.
+sudo -u "$BRIDGE_USER" curl -fL --retry 3 --retry-delay 5 -o "$PYWIN_EXE" "$PYWIN_URL"
+# /quiet + InstallAllUsers=1 + PrependPath=1 is the documented silent
+# install flag set for python.org installers. Each flag is a separate
+# argv entry — do NOT collapse into one string, or Wine sees a single
+# unknown arg and drops back to the interactive GUI (which then hangs).
+run_wine "$PYWIN_INSTALL_TIMEOUT" "python-for-wine installer" \
+  wine "$PYWIN_EXE" /quiet InstallAllUsers=1 PrependPath=1 Include_launcher=0 Include_test=0
+
+# Install Windows-side pip packages. `wine python -m pip ...` — arguments
+# passed as separate argv entries so wine doesn't concatenate them.
+run_wine "$PYWIN_INSTALL_TIMEOUT" "pip upgrade + MetaTrader5/mt5linux/rpyc" \
+  wine python -m pip install --no-input --disable-pip-version-check \
+    --upgrade pip MetaTrader5 mt5linux rpyc
 
 log "downloading MetaTrader 5 terminal"
-sudo -u "$BRIDGE_USER" bash -c "curl -L -o /tmp/mt5setup.exe '$MT5_URL'"
-log "installing MT5 terminal (silent)"
-sudo -u "$BRIDGE_USER" WINEPREFIX="$WINEPREFIX" xvfb-run -a wine /tmp/mt5setup.exe /auto || true
+MT5_EXE="/tmp/mt5setup.exe"
+sudo -u "$BRIDGE_USER" curl -fL --retry 3 --retry-delay 5 -o "$MT5_EXE" "$MT5_URL"
+
+log "installing MT5 terminal (silent, capped at ${MT5_INSTALL_TIMEOUT}s)"
+# The MetaQuotes installer's `/auto` flag is best-effort silent: on some
+# Wine builds the final "Launch terminal" step still spawns terminal64.exe
+# and never returns. We cap it with `timeout` and then kill any stray
+# terminal64.exe so the script always moves on. The bridge only needs
+# the installed files on disk — first-run login happens later, manually.
+run_wine "$MT5_INSTALL_TIMEOUT" "mt5setup.exe /auto" wine "$MT5_EXE" /auto
+sudo -u "$BRIDGE_USER" bash -c '
+  pkill -u "'"$BRIDGE_USER"'" -f terminal64.exe  >/dev/null 2>&1 || true
+  pkill -u "'"$BRIDGE_USER"'" -f mt5setup.exe    >/dev/null 2>&1 || true
+  WINEPREFIX="'"$WINEPREFIX"'" wineserver -k        >/dev/null 2>&1 || true
+'
+
+if [[ -f "$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe" ]]; then
+  log "MT5 terminal installed OK"
+else
+  warn "MT5 terminal not found under Wine prefix — first-run login will need to be done manually (see README). Continuing."
+fi
 
 log "installing bridge Python deps (Linux side)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
