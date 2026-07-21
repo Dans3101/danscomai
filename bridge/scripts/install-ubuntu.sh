@@ -17,7 +17,6 @@ WINEPREFIX="${BRIDGE_HOME}/.wine-mt5"
 MT5_URL="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 # Hard caps so a stuck Wine child can never block the installer forever.
 PYWIN_INSTALL_TIMEOUT="${PYWIN_INSTALL_TIMEOUT:-600}"   # 10 min
-MT5_INSTALL_TIMEOUT="${MT5_INSTALL_TIMEOUT:-900}"       # 15 min
 WINEBOOT_TIMEOUT="${WINEBOOT_TIMEOUT:-300}"             # 5 min
 
 log() { printf '\033[1;36m[install]\033[0m %s\n' "$*"; }
@@ -92,28 +91,14 @@ run_wine "$PYWIN_INSTALL_TIMEOUT" "pip upgrade + MetaTrader5/mt5linux/rpyc" \
   wine python -m pip install --no-input --disable-pip-version-check \
     --upgrade pip MetaTrader5 mt5linux rpyc
 
-log "downloading MetaTrader 5 terminal"
+log "downloading MetaTrader 5 terminal installer (for manual install)"
 MT5_EXE="/tmp/mt5setup.exe"
-sudo -u "$BRIDGE_USER" curl -fL --retry 3 --retry-delay 5 -o "$MT5_EXE" "$MT5_URL"
+sudo -u "$BRIDGE_USER" curl -fL --retry 3 --retry-delay 5 -o "$MT5_EXE" "$MT5_URL" || \
+  warn "MT5 installer download failed — re-download manually before step 2 below."
+chown "$BRIDGE_USER:$BRIDGE_USER" "$MT5_EXE" 2>/dev/null || true
 
-log "installing MT5 terminal (silent, capped at ${MT5_INSTALL_TIMEOUT}s)"
-# The MetaQuotes installer's `/auto` flag is best-effort silent: on some
-# Wine builds the final "Launch terminal" step still spawns terminal64.exe
-# and never returns. We cap it with `timeout` and then kill any stray
-# terminal64.exe so the script always moves on. The bridge only needs
-# the installed files on disk — first-run login happens later, manually.
-run_wine "$MT5_INSTALL_TIMEOUT" "mt5setup.exe /auto" wine "$MT5_EXE" /auto
-sudo -u "$BRIDGE_USER" bash -c '
-  pkill -u "'"$BRIDGE_USER"'" -f terminal64.exe  >/dev/null 2>&1 || true
-  pkill -u "'"$BRIDGE_USER"'" -f mt5setup.exe    >/dev/null 2>&1 || true
-  WINEPREFIX="'"$WINEPREFIX"'" wineserver -k        >/dev/null 2>&1 || true
-'
-
-if [[ -f "$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe" ]]; then
-  log "MT5 terminal installed OK"
-else
-  warn "MT5 terminal not found under Wine prefix — first-run login will need to be done manually (see README). Continuing."
-fi
+log "SKIPPING unattended MT5 install (unreliable under Xvfb on some VPS providers)."
+log "You will install MT5 manually — instructions printed at the end of this script."
 
 log "installing bridge Python deps (Linux side)"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -144,13 +129,37 @@ cat <<EOF
 
 [install] done.
 
-Next steps:
-  1. Edit ${BRIDGE_DIR}/.env with your APP_BASE_URL, ACCOUNT_ID, BRIDGE_TOKEN,
-     MT5_LOGIN, MT5_PASSWORD, MT5_SERVER (from the dashboard Accounts panel).
-  2. Log in to the MT5 terminal ONCE so it stores the broker connection:
+Wine + Python-for-Wine + mt5linux + bridge deps are installed.
+MT5 terminal was NOT installed (skipped by design — Xvfb-driven silent
+install is unreliable on some cloud VPS providers). Install it manually:
+
+  1. Install MT5 terminal under Wine (run this on the VPS; keep the SSH
+     session open until the wizard finishes — press Next/Install/Finish):
+
+       sudo -u ${BRIDGE_USER} \\
+         WINEPREFIX=${WINEPREFIX} WINEARCH=win64 WINEDEBUG=-all \\
+         xvfb-run -a -s "-screen 0 1280x800x24" \\
+         wine /tmp/mt5setup.exe
+
+     If /tmp/mt5setup.exe is missing, re-download it:
+       sudo -u ${BRIDGE_USER} curl -fL --retry 3 -o /tmp/mt5setup.exe \\
+         "${MT5_URL}"
+
+  2. Verify terminal64.exe exists (this MUST print a path):
+
+       ls -l "${WINEPREFIX}/drive_c/Program Files/MetaTrader 5/terminal64.exe"
+
+     If missing, MT5 didn't finish installing — re-run step 1.
+
+  3. Log in to MT5 once so it stores your broker connection:
+
        sudo -u ${BRIDGE_USER} WINEPREFIX=${WINEPREFIX} xvfb-run -a wine \\
          "${WINEPREFIX}/drive_c/Program Files/MetaTrader 5/terminal64.exe"
-  3. Start the services:
+
+  4. Edit ${BRIDGE_DIR}/.env with APP_BASE_URL, ACCOUNT_ID, BRIDGE_TOKEN,
+     MT5_LOGIN, MT5_PASSWORD, MT5_SERVER (from the dashboard Accounts panel).
+
+  5. Start the services:
        sudo systemctl start mt5linux.service mt5-bridge.service
        sudo systemctl status mt5-bridge.service
        journalctl -u mt5-bridge.service -f
