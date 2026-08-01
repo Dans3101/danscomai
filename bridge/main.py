@@ -62,7 +62,7 @@ _STATE: dict[str, dict[str, Any]] = {}
 _DAY_KEY: str = ""
 _DAY_STATS: dict[str, Any] = {"trades": 0, "pnl": 0.0, "losses_streak": 0}
 
-# Pluggable MT5 backend: native (Windows), mt5linux (Ubuntu+Wine), simulator.
+# Pluggable MT5 backend: remote (Windows Companion), native (Windows), simulator.
 # See bridge/mt5_client.py.
 sys.path.insert(0, str(Path(__file__).parent))
 from mt5_client import mt5, BACKEND  # noqa: E402
@@ -90,8 +90,8 @@ def connect_mt5() -> bool:
     """Initialize the selected MT5 backend.
 
     - native: launches / attaches to the local MT5 terminal on Windows.
-    - mt5linux: calls the RPyC server running inside Wine which in turn
-      talks to the MT5 terminal. Requires the mt5linux server to be up.
+    - remote: asks the Windows Companion Service (through the local hub)
+      to attach/log in the terminal for this account.
     - simulator: no-op init that always succeeds.
     """
     kwargs: dict[str, Any] = {}
