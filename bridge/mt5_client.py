@@ -2,11 +2,12 @@
 
 Selects one of three backends via `MT5_BACKEND`:
 
-    native     — official `MetaTrader5` package (Windows only)
-    mt5linux   — `mt5linux` RPyC bridge to an MT5 terminal running under Wine
+    remote     — Windows Companion Service reached through the local
+                 Companion Hub (default on Linux; no Wine, no Xvfb)
+    native     — official `MetaTrader5` package (running ON Windows)
     simulator  — in-process simulator, no broker connection required
 
-All three backends expose the same attribute surface used by `main.py`
+All backends expose the same attribute surface used by `main.py`
 (constants + functions), so the rest of the bridge is broker- and
 platform-agnostic.
 """
@@ -25,30 +26,21 @@ def _load_native():
     return mt5
 
 
-def _load_mt5linux():
-    # mt5linux ships a drop-in `MetaTrader5` class that speaks RPyC to a
-    # tiny Python server running INSIDE Wine next to the MT5 terminal.
-    from mt5linux import MetaTrader5  # type: ignore
-    host = os.environ.get("MT5LINUX_HOST", "127.0.0.1")
-    port = int(os.environ.get("MT5LINUX_PORT", "18812"))
-    client = MetaTrader5(host=host, port=port)
-    log.info("mt5linux backend connected to %s:%s", host, port)
+def _load_remote():
+    import remote_mt5  # type: ignore
+    client = remote_mt5.build(os.environ.get("ACCOUNT_ID"))
+    log.info("remote backend using companion hub at %s", remote_mt5.HUB_RPC)
     return client
-
-
-def _load_simulator():
-    from . import simulator  # type: ignore
-    return simulator.build()
 
 
 def _resolve():
     global BACKEND
     order: list[str]
     if BACKEND == "auto":
-        # Prefer real broker connection; fall back to simulator only if
-        # explicitly requested via BACKEND=simulator.
+        # On Windows use the native terminal; everywhere else talk to the
+        # Windows Companion Service through the hub.
         import sys
-        order = ["native"] if sys.platform == "win32" else ["mt5linux"]
+        order = ["native"] if sys.platform == "win32" else ["remote"]
     else:
         order = [BACKEND]
 
@@ -57,8 +49,8 @@ def _resolve():
         try:
             if name == "native":
                 m = _load_native()
-            elif name == "mt5linux":
-                m = _load_mt5linux()
+            elif name == "remote":
+                m = _load_remote()
             elif name == "simulator":
                 # Local import (not relative) so `python bridge/main.py` works.
                 import simulator  # type: ignore

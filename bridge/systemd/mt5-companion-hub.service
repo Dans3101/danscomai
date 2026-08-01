@@ -1,0 +1,25 @@
+[Unit]
+Description=MT5 Companion Hub (WebSocket endpoint for the Windows Companion)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__BRIDGE_DIR__
+EnvironmentFile=__BRIDGE_DIR__/.env
+ExecStart=__BRIDGE_DIR__/.venv/bin/python __BRIDGE_DIR__/companion_hub.py
+Restart=always
+RestartSec=5
+StartLimitBurst=0
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=full
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

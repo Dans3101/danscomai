@@ -1,72 +1,63 @@
-# MT5 Bridge
+# MT5 Backend (Ubuntu) + Windows Companion
 
-Broker-agnostic Python service that connects an MT5 terminal to the Lovable
-dashboard. Runs on **Ubuntu 22.04+ with Wine** (recommended), on Windows, or
-in **simulator** mode for local development.
+Phase 1 architecture: the trading logic stays on **Ubuntu**; MetaTrader 5 runs
+**natively on Windows** inside the Companion Service. Wine, Xvfb, mt5linux and
+RPyC are gone.
 
 ## Architecture
 
 ```
- MT5 terminal (Wine)  <->  mt5linux RPyC server  <->  Python bridge
-       ^                                                    |
-       |                                                    v
-  any broker (XM, Exness, IC Markets,           https://YOUR-APP
-  FBS, Pepperstone, HFM, Tickmill,               /api/public/bridge/
-  Deriv MT5, FXPesa, ...)                        heartbeat | commands
-                                                          | strategies
+ Ubuntu VPS                                   Windows host
+ ─────────────────────────────                ─────────────────────────────
+  main.py (strategies, risk)                   companion.py
+     │  remote_mt5 (sync RPC)                    ├ worker → MT5 (account 1)
+     ▼  127.0.0.1:8766                           ├ worker → MT5 (account 2)
+  companion_hub.py  ◀──── persistent wss ───▶    └ worker → MT5 (account 3)
+     │
+     ▼  https://YOUR-APP/api/public/bridge/{heartbeat,commands,strategies,ai-analysis}
 ```
 
-The bridge selects a backend at startup (`MT5_BACKEND`):
+The REST API, database, dashboard and strategy engine are unchanged — only the
+MT5 transport was replaced.
 
-| backend    | platform         | use                                   |
-| ---------- | ---------------- | ------------------------------------- |
-| `native`   | Windows          | official `MetaTrader5` package        |
-| `mt5linux` | Ubuntu + Wine    | default on Linux, RPyC to Wine        |
-| `simulator`| any              | dev/test, no broker connection        |
-| `auto`     | any              | native on Win, mt5linux on Linux      |
+| backend     | platform | use                                            |
+| ----------- | -------- | ---------------------------------------------- |
+| `remote`    | Linux    | default — talks to the Windows Companion        |
+| `native`    | Windows  | official `MetaTrader5` package, same machine    |
+| `simulator` | any      | dev/test, no broker connection                  |
+| `auto`      | any      | native on Windows, remote on Linux              |
 
-Broker-agnostic — only `BROKER`, `MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`
-are required. No broker-specific code.
-
-## One-command Ubuntu install
-
-Works on any Ubuntu 22.04 / 24.04 VPS: Oracle Cloud Always Free, GCP Compute
-Engine, AWS EC2, Azure, Contabo, Hetzner, DigitalOcean, Vultr, Linode.
+## Ubuntu install
 
 ```bash
 git clone <this-repo> && cd bridge
 sudo bash scripts/install-ubuntu.sh
-# edit .env with values from the dashboard Accounts panel
-sudo systemctl start mt5linux mt5-bridge
-journalctl -u mt5-bridge -f
+# edit /home/mt5bridge/mt5-bridge/.env
+sudo systemctl start mt5-companion-hub mt5-bridge
+journalctl -u mt5-companion-hub -f
 ```
 
-The installer sets up: Wine (stable), Python 3.11 under Wine, MetaTrader 5
-terminal (silent install), `mt5linux` + `rpyc`, a dedicated `mt5bridge`
-system user, a Python venv, and two systemd services with automatic
-restart-on-failure.
+Installs Python, a venv, the hub + bridge systemd units (restart-on-failure)
+and opens the companion WebSocket port. No Wine, no MT5 terminal on Linux.
 
-## Docker
+### TLS
+
+Recommended: terminate TLS with nginx/caddy and proxy
+`wss://your-host/companion` → `http://127.0.0.1:8765`. Alternatively set
+`HUB_TLS_CERT` / `HUB_TLS_KEY` in `.env` and the hub serves TLS itself.
+
+### Hub status
 
 ```bash
-cp .env.example .env   # fill in
-docker compose up -d
-docker compose logs -f
+curl -s http://127.0.0.1:8766/status | python3 -m json.tool
 ```
 
-The Compose file persists the Wine prefix (`wine-prefix` volume) so the MT5
-terminal login survives container rebuilds. Docker `HEALTHCHECK` reads
-`/tmp/mt5-bridge.health`.
+## Windows Companion
 
-## Windows (unchanged from earlier releases)
-
-```powershell
-pip install -r requirements.txt
-copy .env.example .env
-python main.py
-```
-
-`MT5_BACKEND=auto` picks `native` automatically.
+See [`../windows-companion/README.md`](../windows-companion/README.md).
+Up to **3 MT5 accounts**, each needing only login / password / server, all
+multiplexed over one outbound TLS WebSocket authenticated with the Bridge
+Token.
 
 ## Simulator mode (no broker required)
 
@@ -81,11 +72,14 @@ broker. Ideal for CI and demos.
 ## Automatic recovery
 
 - **Bridge crashes** → systemd/Docker restart (`Restart=always`).
-- **mt5linux RPyC crashes** → systemd restarts it (`Restart=always`).
-- **MT5 terminal crash under Wine** → the mt5linux service respawns Wine,
-  the bridge reconnects via exponential backoff (up to `MAX_RECONNECT_DELAY`).
-- **Broker socket drop** → `mt5.initialize()` re-runs inside `_reconnect_loop`;
-  the dashboard sees `connection_status=error` during the gap.
+- **Hub crashes** → systemd restarts it; the Companion reconnects on its own.
+- **Companion or internet drop** → the Companion retries the WebSocket with
+  exponential backoff (2s → 60s); RPCs fail fast with `503` meanwhile and the
+  dashboard shows `connection_status=error`.
+- **MT5 terminal closed or crashed** → the account worker relaunches
+  `terminal64.exe` and logs back in on the next 10s healthcheck.
+- **Worker process death** → the Companion supervisor restarts it.
+- **Broker socket drop** → `mt5.initialize()` re-runs on the Windows side.
 - **Dashboard unreachable** → heartbeats + command polls retry every
   `POLL_SECONDS`; nothing else blocks.
 - **Health file** `HEALTH_FILE` is touched every loop iteration. External
@@ -94,37 +88,28 @@ broker. Ideal for CI and demos.
 
 ## Security
 
-- Run the service as an unprivileged user (`mt5bridge`), never root.
+- Run the services as an unprivileged user (`mt5bridge`), never root.
 - `.env` is mode `600` and never committed.
-- `BRIDGE_TOKEN` is a per-account opaque secret; rotate it from the dashboard.
-- MT5 credentials are AES-GCM encrypted at rest in the platform database.
-- The systemd units enable `NoNewPrivileges`, `ProtectSystem=full`, and
-  `PrivateTmp`.
-- The bridge only calls two HTTPS endpoints on your app; no inbound ports
-  are exposed (RPyC binds to `127.0.0.1` only).
+- `BRIDGE_TOKEN` authenticates the Companion; rotate it from the dashboard.
+- Broker credentials never leave the Windows host (`config.json`).
+- Only whitelisted MT5 functions can be invoked remotely
+  (`bridge/protocol.py::ALLOWED_FUNCTIONS`).
+- The loopback RPC binds `127.0.0.1` only; the Windows host exposes no
+  inbound ports.
+- The systemd units enable `NoNewPrivileges` and `ProtectSystem=full`.
 
-## Migrating from the old Windows-only bridge
+## Migrating from the Wine bridge
 
-No dashboard, database, or API changes are required — only the bridge
-process moves.
+No dashboard, database, or API changes are required.
 
-1. Stop the Windows bridge (or leave it running for cutover safety).
-2. Provision an Ubuntu VPS.
-3. Run `sudo bash scripts/install-ubuntu.sh`.
-4. Copy your existing `.env` from Windows to `/home/mt5bridge/mt5-bridge/.env`,
-   or paste values fresh from the dashboard.
-5. Add one new line: `MT5_BACKEND=mt5linux` (or leave `auto`).
-6. Start the services.
-7. Confirm the dashboard shows the account as `Connected` and equity ticks.
-8. Decommission the Windows VPS.
-
-All existing strategies, positions, trade history, and logs continue to
-work unchanged — the bridge speaks the same heartbeat/commands/strategies
-API.
+1. Stop and disable `mt5linux` and remove the Wine prefix.
+2. Re-run `sudo bash scripts/install-ubuntu.sh` (Wine-free).
+3. Set `MT5_BACKEND=remote` (or leave `auto`) and add `COMPANION_TOKENS`.
+4. On Windows, set up `windows-companion/` and start it.
+5. Confirm the dashboard shows the account as `Connected` and equity ticks.
 
 ## The companion EA
 
-`mt5_autotrader.mq5` is optional. It writes a per-tick snapshot to MT5's
-`Common\Files` folder, which the bridge can tail as a fallback when the
-RPyC channel is temporarily unavailable. Copy it into the MT5 terminal's
-`MQL5/Experts` folder, compile, and attach to any chart.
+`mt5_autotrader.mq5` remains optional: it writes per-tick snapshots to MT5's
+`Common\Files` folder on the Windows host for diagnostics. Copy it into the
+terminal's `MQL5/Experts` folder, compile, and attach to any chart.

@@ -1,0 +1,3 @@
+# Windows Companion Service dependencies (Windows only).
+MetaTrader5>=5.0.45
+websockets>=12.0
