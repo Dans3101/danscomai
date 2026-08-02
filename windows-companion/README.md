@@ -13,16 +13,25 @@ Ubuntu backend                          Windows host
                                                  └ worker (account 3) ─ MT5
 ```
 
-## Setup
+## Setup (recommended: service installer)
 
-1. Install Python 3.11+ and MetaTrader 5 on the Windows machine.
+1. Install Python 3.10+ and MetaTrader 5 on the Windows machine.
 2. Copy this folder to the Windows host.
-3. `copy config.example.json config.json` and fill in:
-   - `backend_ws_url` — `wss://<your-ubuntu-host>/companion`
-   - `bridge_token` — the Bridge Token shown in the dashboard Accounts panel
-   - one `accounts[]` entry per MT5 account (max 3) with `account_id`
-     (the dashboard account UUID), `login`, `password`, `server`
-4. `powershell -ExecutionPolicy Bypass -File run.ps1`
+3. In an **elevated** PowerShell: `powershell -ExecutionPolicy Bypass -File install.ps1`
+
+The wizard asks for Backend URL, Bridge Token, Account ID, MT5 Login, Password
+and Server; verifies the backend link; stores the credentials DPAPI-encrypted
+in `config.secure.json`; and installs `MT5Companion` as an auto-starting,
+self-restarting Windows Service with rotating logs in `logs\`.
+
+    .\install.ps1 -Upgrade     # update deps + restart, keep credentials
+    .\install.ps1 -Uninstall   # remove the service
+
+Manual/dev mode (foreground, plain `config.json` from `config.example.json`):
+`powershell -ExecutionPolicy Bypass -File run.ps1`
+
+For 2–3 accounts, run `install.ps1` once, then add the extra `accounts[]`
+entries and re-run `install.ps1` with the values, or edit and re-encrypt.
 
 ## Multiple accounts
 
