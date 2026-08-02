@@ -129,10 +129,14 @@ if ($Upgrade -and $existing) {
   if (-not $BackendUrl) { Die "Backend URL is required (shown at the end of the Ubuntu installer)." }
   if ($BackendUrl -notmatch '^wss?://') { Die "Backend URL must start with ws:// or wss://" }
 
-  $BridgeToken  = AskText "Bridge Token" ($BridgeToken ? $BridgeToken : $existing.bridge_token) -Required
-  $AccountId    = AskText "Account ID (UUID from the dashboard Accounts page)" ($AccountId ? $AccountId : $acct0.account_id) -Required
-  $Login        = AskText "MT5 Login" ($Login ? $Login : $(if($acct0){"$($acct0.login)"})) -Required
-  $Server       = AskText "MT5 Server" ($Server ? $Server : $acct0.server) -Required
+  if (-not $BridgeToken -and $existing) { $BridgeToken = $existing.bridge_token }
+  if (-not $AccountId   -and $acct0)    { $AccountId   = $acct0.account_id }
+  if (-not $Login       -and $acct0)    { $Login       = "$($acct0.login)" }
+  if (-not $Server      -and $acct0)    { $Server      = $acct0.server }
+  $BridgeToken  = AskText "Bridge Token" $BridgeToken -Required
+  $AccountId    = AskText "Account ID (UUID from the dashboard Accounts page)" $AccountId -Required
+  $Login        = AskText "MT5 Login" $Login -Required
+  $Server       = AskText "MT5 Server" $Server -Required
   if (-not $Password) {
     if ($acct0 -and $acct0.password) {
       $sec = Read-Host "      MT5 Password (Enter = keep current)" -AsSecureString
