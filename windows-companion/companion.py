@@ -22,16 +22,16 @@ from typing import Any
 import websockets
 
 import protocol as P
+import secure_store
 from mt5_worker import AccountWorker
 
 HERE = Path(__file__).parent
-CONFIG_PATH = Path(os.environ.get("COMPANION_CONFIG", HERE / "config.json"))
+CONFIG_DIR = Path(os.environ.get("COMPANION_CONFIG_DIR", HERE))
 
 
 def load_config() -> dict[str, Any]:
-    if not CONFIG_PATH.exists():
-        raise SystemExit(f"missing config file: {CONFIG_PATH} (copy config.example.json)")
-    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    """DPAPI-protected config.secure.json (installer) or plain config.json (dev)."""
+    cfg = secure_store.load(CONFIG_DIR)
     accounts = cfg.get("accounts") or []
     if not accounts:
         raise SystemExit("config.accounts is empty")
