@@ -30,12 +30,15 @@ MT5 transport was replaced.
 ## Ubuntu install
 
 ```bash
-git clone <this-repo> && cd bridge
-sudo bash scripts/install-ubuntu.sh
-# edit /home/mt5bridge/mt5-bridge/.env
-sudo systemctl start mt5-companion-hub mt5-bridge
+git clone <this-repo> && cd <repo>
+sudo bash install.sh          # one command: deps, venv, .env wizard,
+                              # services, verification
 journalctl -u mt5-companion-hub -f
 ```
+
+`install.sh --upgrade` re-syncs code and dependencies without touching your
+configuration; `--uninstall` removes the services. The older
+`scripts/install-ubuntu.sh` remains for manual/step-by-step installs.
 
 Installs Python, a venv, the hub + bridge systemd units (restart-on-failure)
 and opens the companion WebSocket port. No Wine, no MT5 terminal on Linux.
