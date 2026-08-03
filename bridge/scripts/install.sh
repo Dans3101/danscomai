@@ -215,6 +215,18 @@ ok "configuration written (mode 600, owner ${BRIDGE_USER})"
 
 # ------------------------------------------------------- 6 backend reachable
 step "verifying the dashboard backend is reachable"
+VERIFY_URL="${APP_BASE_URL}/api/public/bridge/verify"
+VCODE="$(curl -s -o /tmp/mt5-verify.out -w '%{http_code}' --max-time 20 -X POST "$VERIFY_URL" \
+  -H 'content-type: application/json' \
+  -d "{\"account_id\":\"${ACCOUNT_ID}\",\"bridge_token\":\"${BRIDGE_TOKEN}\"}" || echo 000)"
+case "$VCODE" in
+  200) ok "bridge token verified by the backend" ;;
+  401) die "backend rejected the Bridge Token (HTTP 401). Copy Account ID + Bridge Token again from Dashboard → Accounts → Bridge config." ;;
+  404) die "verify endpoint not found at ${VERIFY_URL}. Publish the dashboard, then re-run this installer." ;;
+  000) die "cannot reach ${APP_BASE_URL} — DNS/firewall/outbound HTTPS blocked on this VPS." ;;
+  *)   warn "verify endpoint answered HTTP ${VCODE}: $(head -c 200 /tmp/mt5-verify.out)" ;;
+esac
+rm -f /tmp/mt5-verify.out
 HB_URL="${APP_BASE_URL}/api/public/bridge/heartbeat"
 CODE="$(curl -s -o /tmp/mt5-hb.out -w '%{http_code}' --max-time 20 -X POST "$HB_URL" \
   -H 'content-type: application/json' \
