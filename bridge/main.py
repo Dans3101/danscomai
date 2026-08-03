@@ -25,11 +25,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
-log = logging.getLogger("bridge")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import logging_setup  # noqa: E402
+
+log = logging_setup.setup("bridge")
 
 APP = os.environ["APP_BASE_URL"].rstrip("/")
 ACCOUNT_ID = os.environ["ACCOUNT_ID"]
@@ -47,6 +46,10 @@ CMD_URL = f"{APP}/api/public/bridge/commands"
 HDRS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 STRAT_URL = f"{APP}/api/public/bridge/strategies"
 AI_URL = f"{APP}/api/public/bridge/ai-analysis"
+SVC_LOG_URL = f"{APP}/api/public/bridge/service-logs"
+HUB_RPC = f"http://{os.environ.get('HUB_RPC_HOST', '127.0.0.1')}:{os.environ.get('HUB_RPC_PORT', '8766')}"
+LOG_SHIP_SECONDS = float(os.environ.get("LOG_SHIP_SECONDS", "60"))
+_last_shipped = 0.0
 
 # Phase 1 hard-lock: this bot only trades gold. Additional symbols will be
 # enabled in a later release.
@@ -712,6 +715,7 @@ def post_heartbeat(client: httpx.Client, payload: dict[str, Any]) -> None:
 
 
 def poll_commands(client: httpx.Client) -> None:
+    ...PLACEHOLDER...
     try:
         r = client.get(CMD_URL, headers=HDRS, params={"account_id": ACCOUNT_ID}, timeout=10)
         if r.status_code >= 400:
