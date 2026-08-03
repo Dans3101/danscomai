@@ -45,11 +45,13 @@ def load_config() -> dict[str, Any]:
 
 
 CFG = load_config()
-logging.basicConfig(
-    level=str(CFG.get("log_level", "INFO")).upper(),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
-log = logging.getLogger("companion")
+os.environ.setdefault("LOG_LEVEL", str(CFG.get("log_level", "INFO")).upper())
+os.environ.setdefault("LOG_DIR", str(Path(__file__).resolve().parent / "logs"))
+import logging_setup  # noqa: E402
+
+log = logging_setup.setup("companion")
+_last_log_ship = 0.0
+LOG_SHIP_SECONDS = float(CFG.get("log_ship_seconds", 60))
 
 BACKEND_WS = str(CFG["backend_ws_url"]).rstrip("/")
 BRIDGE_TOKEN = str(CFG["bridge_token"])
@@ -91,6 +93,7 @@ def _ssl_context() -> ssl.SSLContext | None:
 
 async def pump_worker_results(ws) -> None:
     """Forward worker replies/status to the backend; keep workers alive."""
+    global _last_log_ship
     last_health = 0.0
     while True:
         for w in WORKERS.values():
@@ -116,6 +119,12 @@ async def pump_worker_results(ws) -> None:
             last_health = now
             for w in WORKERS.values():
                 w.submit({"kind": "healthcheck"})
+        if now - _last_log_ship >= LOG_SHIP_SECONDS:
+            window = max(LOG_SHIP_SECONDS * 2, 120)
+            entries = logging_setup.recent_errors(window)
+            _last_log_ship = now
+            if entries:
+                await ws.send(json.dumps({"type": "log", "entries": entries[:100]}))
         await asyncio.sleep(0.05)
 
 

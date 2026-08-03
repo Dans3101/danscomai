@@ -7,13 +7,14 @@ import { z } from "zod";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 const Payload = z.object({
   account_id: z.string().uuid(),
-  connection_status: z.enum(["connected", "disconnected", "error"]).optional(),
+  bridge_token: z.string().min(8).optional(),
+  connection_status: z.enum(["connected", "connecting", "disconnected", "error"]).optional(),
   snapshot: z
     .object({
       balance: z.number().nullable().optional(),
@@ -89,15 +90,21 @@ export const Route = createFileRoute("/api/public/bridge/heartbeat")({
   server: {
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
+      GET: async () =>
+        json({
+          ok: true,
+          service: "mt5-bridge-heartbeat",
+          method: "POST",
+          server_time: new Date().toISOString(),
+        }),
       POST: async ({ request }) => {
         const auth = request.headers.get("authorization") ?? "";
-        const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-        if (!token) return json({ error: "missing bearer" }, 401);
-
         const body = await request.json().catch(() => null);
         const parsed = Payload.safeParse(body);
         if (!parsed.success) return json({ error: "invalid payload", details: parsed.error.flatten() }, 400);
         const p = parsed.data;
+        const token = (auth.startsWith("Bearer ") ? auth.slice(7) : "") || p.bridge_token || "";
+        if (!token) return json({ error: "missing bridge token" }, 401);
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 

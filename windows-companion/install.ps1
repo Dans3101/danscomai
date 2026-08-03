@@ -40,7 +40,7 @@ $SecureCfg   = Join-Path $Root 'config.secure.json'
 $LogDir      = Join-Path $Root 'logs'
 $NssmExe     = Join-Path $Root 'nssm.exe'
 
-$script:Step = 0; $script:Total = 8
+$script:Step = 0; $script:Total = 9
 function Step($m) { $script:Step++; Write-Host "[$script:Step/$script:Total] $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "      ok - $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "      ! $m" -ForegroundColor Yellow }
@@ -75,6 +75,72 @@ if (-not $sysPy) { Die "Python is not installed or not on PATH. Install Python 3
 $ver = & python -c "import sys;print('%d.%d'%sys.version_info[:2])"
 if ([version]$ver -lt [version]'3.10') { Die "Python $ver found; 3.10 or newer is required." }
 Ok "python $ver"
+
+# ------------------------------------------------------------- 1b preflight
+Step "preflight checks (privileges, DNS, ports, firewall, certificates)"
+# privileges: the service runs as LocalSystem
+Ok "running elevated as $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+
+# disk space
+$freeGb = [math]::Round((Get-PSDrive -Name ((Get-Item $Root).PSDrive.Name)).Free / 1GB, 1)
+if ($freeGb -lt 1) { Warn "only ${freeGb}GB free on this drive - MT5 + logs need ~1GB" } else { Ok "${freeGb}GB free disk" }
+
+# outbound internet
+try {
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  Invoke-WebRequest -Uri 'https://www.msftconnecttest.com/connecttest.txt' -UseBasicParsing -TimeoutSec 10 | Out-Null
+  Ok "outbound internet reachable"
+} catch { Warn "outbound HTTPS check failed - the companion needs internet to reach the Ubuntu hub" }
+
+# backend host DNS / TCP / TLS (only when we already know the URL)
+$preUrl = $BackendUrl
+if (-not $preUrl -and (Test-Path $SecureCfg)) {
+  try {
+    Add-Type -AssemblyName System.Security
+    $preUrl = ([Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect(
+      [Convert]::FromBase64String((Get-Content $SecureCfg -Raw).Trim()), $null, 'LocalMachine')) |
+      ConvertFrom-Json).backend_ws_url
+  } catch { }
+}
+if ($preUrl -match '^wss?://([^/:]+)(?::(\d+))?') {
+  $bHost = $Matches[1]
+  $bPort = if ($Matches[2]) { [int]$Matches[2] } elseif ($preUrl -like 'wss://*') { 443 } else { 8765 }
+  try {
+    $ips = [Net.Dns]::GetHostAddresses($bHost) | Select-Object -ExpandProperty IPAddressToString
+    Ok "DNS: $bHost -> $($ips -join ', ')"
+  } catch { Die "DNS lookup for '$bHost' failed. Check the Backend URL or use the server's IP address." }
+
+  $tcp = Test-NetConnection -ComputerName $bHost -Port $bPort -WarningAction SilentlyContinue
+  if ($tcp.TcpTestSucceeded) { Ok "TCP ${bHost}:${bPort} reachable" }
+  else { Die "cannot open TCP ${bHost}:${bPort}. Open that port in the cloud firewall (and ufw) on the Ubuntu server." }
+
+  if ($preUrl -like 'wss://*') {
+    try {
+      $c = New-Object Net.Sockets.TcpClient($bHost, $bPort)
+      $ssl = New-Object Net.Security.SslStream($c.GetStream(), $false, { $true })
+      $ssl.AuthenticateAsClient($bHost)
+      $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2($ssl.RemoteCertificate)
+      $days = [int]($cert.NotAfter - (Get-Date)).TotalDays
+      if ($days -lt 0) { Warn "server TLS certificate EXPIRED on $($cert.NotAfter)" }
+      elseif ($days -lt 14) { Warn "server TLS certificate expires in $days day(s)" }
+      else { Ok "TLS certificate valid for $days more day(s) ($($cert.Subject))" }
+      $ssl.Dispose(); $c.Close()
+    } catch { Warn "TLS handshake check failed: $($_.Exception.Message)" }
+  } else {
+    Warn "backend URL is plain ws:// - traffic is not encrypted. Prefer wss:// behind nginx/caddy."
+  }
+} else {
+  Warn "backend URL not known yet - network checks will run after the wizard"
+}
+
+# local port MT5/companion conflicts + outbound firewall rule
+if (-not (Get-NetFirewallRule -DisplayName 'MT5 Companion (outbound)' -ErrorAction SilentlyContinue)) {
+  try {
+    New-NetFirewallRule -DisplayName 'MT5 Companion (outbound)' -Direction Outbound -Action Allow `
+      -Program $Py -ErrorAction Stop | Out-Null
+    Ok "outbound firewall rule created for the companion"
+  } catch { Warn "could not create the outbound firewall rule (usually not needed)" }
+} else { Ok "outbound firewall rule already present" }
 
 # ------------------------------------------------------------------- 2 mt5
 Step "checking MetaTrader 5 terminal"

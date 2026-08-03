@@ -25,11 +25,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
-log = logging.getLogger("bridge")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import logging_setup  # noqa: E402
+
+log = logging_setup.setup("bridge")
 
 APP = os.environ["APP_BASE_URL"].rstrip("/")
 ACCOUNT_ID = os.environ["ACCOUNT_ID"]
@@ -47,6 +46,10 @@ CMD_URL = f"{APP}/api/public/bridge/commands"
 HDRS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
 STRAT_URL = f"{APP}/api/public/bridge/strategies"
 AI_URL = f"{APP}/api/public/bridge/ai-analysis"
+SVC_LOG_URL = f"{APP}/api/public/bridge/service-logs"
+HUB_RPC = f"http://{os.environ.get('HUB_RPC_HOST', '127.0.0.1')}:{os.environ.get('HUB_RPC_PORT', '8766')}"
+LOG_SHIP_SECONDS = float(os.environ.get("LOG_SHIP_SECONDS", "60"))
+_last_shipped = 0.0
 
 # Phase 1 hard-lock: this bot only trades gold. Additional symbols will be
 # enabled in a later release.
@@ -711,6 +714,40 @@ def post_heartbeat(client: httpx.Client, payload: dict[str, Any]) -> None:
         M.heartbeat_latency.labels(**_MLBL).observe(time.time() - t0)
 
 
+def ship_service_logs(client: httpx.Client) -> None:
+    """Forward the last errors/warnings of the bridge and hub to the dashboard."""
+    global _last_shipped
+    now = time.time()
+    if now - _last_shipped < LOG_SHIP_SECONDS:
+        return
+    window = max(LOG_SHIP_SECONDS * 2, 120)
+    entries = [
+        {"level": e["level"], "source": "bridge", "message": e["message"], "ts": e["ts_iso"]}
+        for e in logging_setup.recent_errors(window)
+    ]
+    try:
+        r = client.get(f"{HUB_RPC}/logs", timeout=5)
+        if r.status_code < 400:
+            entries += [
+                {"level": e.get("level", "error"), "source": e.get("service", "hub"),
+                 "message": e.get("message", ""), "ts": e.get("ts_iso")}
+                for e in r.json().get("entries", [])
+                if (now - float(e.get("ts") or 0)) <= window
+            ]
+    except Exception:
+        pass
+    _last_shipped = now
+    if not entries:
+        return
+    try:
+        client.post(
+            SVC_LOG_URL, headers=HDRS,
+            json={"account_id": ACCOUNT_ID, "entries": entries[:200]}, timeout=10,
+        )
+    except Exception:
+        pass
+
+
 def poll_commands(client: httpx.Client) -> None:
     try:
         r = client.get(CMD_URL, headers=HDRS, params={"account_id": ACCOUNT_ID}, timeout=10)
@@ -764,6 +801,7 @@ def main() -> None:
                 post_heartbeat(client, collect_state())
                 poll_commands(client)
                 evaluate_strategies()
+                ship_service_logs(client)
                 _touch_health("ok")
             except KeyboardInterrupt:
                 log.info("shutting down")

@@ -142,3 +142,37 @@ reconnects, heartbeat latency and trade counts.
 | Windows: "FAIL: cannot reach ws://…" | cloud firewall port closed, or hub not running |
 | `no companion for account` | Companion service stopped, or Account ID mismatch |
 | Dashboard shows Connected but no trades | strategy disabled, outside session hours, or risk limits hit — see Logs |
+## 10. Backend API endpoints (dashboard domain)
+
+These are served by the dashboard backend, never by the React SPA:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/public/bridge/heartbeat` | health probe (JSON) |
+| POST | `/api/public/bridge/heartbeat` | bridge state ingestion (Bearer or `bridge_token` in body) |
+| POST | `/api/public/bridge/verify` | Bridge Token check → **200** valid, **401** invalid |
+| GET | `/api/public/bridge/status` | API health; with `?account_id=` + Bearer → live account status |
+| GET | `/api/public/bridge/ws` | WebSocket discovery: returns the Companion Hub URL (426/501 JSON) |
+| POST | `/api/public/bridge/service-logs` | Hub/Companion log ingestion for the in-app viewer |
+
+**WebSocket:** the persistent Companion link is *not* hosted on
+`danscomai.lovable.app` — the dashboard runs on an edge runtime that cannot hold
+long-lived sockets. The Companion connects to your Ubuntu Companion Hub:
+
+```
+ws://<ubuntu-host>:8765            # direct
+wss://<your-domain>/companion      # recommended, TLS via nginx/caddy
+```
+
+`/api/public/bridge/ws` returns exactly that guidance as JSON so installers can
+fail with a clear message instead of receiving HTML.
+
+## 11. Logging
+
+- Hub, Bridge and Companion write rotating files (`logs/<service>.log`,
+  10 MB × 5) plus journald / NSSM output.
+- Ubuntu also gets `/etc/logrotate.d/mt5-bridge` (daily, 14 days, compressed).
+- Warnings/errors from the last 24h are buffered in-process, exposed on the hub
+  at `http://127.0.0.1:8766/logs`, shipped by the bridge to
+  `/api/public/bridge/service-logs`, and shown in the dashboard under
+  **Activity → Service errors (24h)**.

@@ -17,7 +17,11 @@ import { Route as AuthenticatedStrategiesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedLogsRouteImport } from './routes/_authenticated/logs'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
+import { Route as ApiPublicBridgeWsRouteImport } from './routes/api/public/bridge/ws'
+import { Route as ApiPublicBridgeVerifyRouteImport } from './routes/api/public/bridge/verify'
 import { Route as ApiPublicBridgeStrategiesRouteImport } from './routes/api/public/bridge/strategies'
+import { Route as ApiPublicBridgeStatusRouteImport } from './routes/api/public/bridge/status'
+import { Route as ApiPublicBridgeServiceLogsRouteImport } from './routes/api/public/bridge/service-logs'
 import { Route as ApiPublicBridgeHeartbeatRouteImport } from './routes/api/public/bridge/heartbeat'
 import { Route as ApiPublicBridgeCommandsRouteImport } from './routes/api/public/bridge/commands'
 import { Route as ApiPublicBridgeAiAnalysisRouteImport } from './routes/api/public/bridge/ai-analysis'
@@ -61,10 +65,31 @@ const AuthenticatedAccountsRoute = AuthenticatedAccountsRouteImport.update({
   path: '/accounts',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicBridgeWsRoute = ApiPublicBridgeWsRouteImport.update({
+  id: '/api/public/bridge/ws',
+  path: '/api/public/bridge/ws',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicBridgeVerifyRoute = ApiPublicBridgeVerifyRouteImport.update({
+  id: '/api/public/bridge/verify',
+  path: '/api/public/bridge/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicBridgeStrategiesRoute =
   ApiPublicBridgeStrategiesRouteImport.update({
     id: '/api/public/bridge/strategies',
     path: '/api/public/bridge/strategies',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicBridgeStatusRoute = ApiPublicBridgeStatusRouteImport.update({
+  id: '/api/public/bridge/status',
+  path: '/api/public/bridge/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicBridgeServiceLogsRoute =
+  ApiPublicBridgeServiceLogsRouteImport.update({
+    id: '/api/public/bridge/service-logs',
+    path: '/api/public/bridge/service-logs',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiPublicBridgeHeartbeatRoute =
@@ -96,7 +121,11 @@ export interface FileRoutesByFullPath {
   '/api/public/bridge/ai-analysis': typeof ApiPublicBridgeAiAnalysisRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
+  '/api/public/bridge/service-logs': typeof ApiPublicBridgeServiceLogsRoute
+  '/api/public/bridge/status': typeof ApiPublicBridgeStatusRoute
   '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
+  '/api/public/bridge/verify': typeof ApiPublicBridgeVerifyRoute
+  '/api/public/bridge/ws': typeof ApiPublicBridgeWsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -109,7 +138,11 @@ export interface FileRoutesByTo {
   '/api/public/bridge/ai-analysis': typeof ApiPublicBridgeAiAnalysisRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
+  '/api/public/bridge/service-logs': typeof ApiPublicBridgeServiceLogsRoute
+  '/api/public/bridge/status': typeof ApiPublicBridgeStatusRoute
   '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
+  '/api/public/bridge/verify': typeof ApiPublicBridgeVerifyRoute
+  '/api/public/bridge/ws': typeof ApiPublicBridgeWsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -124,7 +157,11 @@ export interface FileRoutesById {
   '/api/public/bridge/ai-analysis': typeof ApiPublicBridgeAiAnalysisRoute
   '/api/public/bridge/commands': typeof ApiPublicBridgeCommandsRoute
   '/api/public/bridge/heartbeat': typeof ApiPublicBridgeHeartbeatRoute
+  '/api/public/bridge/service-logs': typeof ApiPublicBridgeServiceLogsRoute
+  '/api/public/bridge/status': typeof ApiPublicBridgeStatusRoute
   '/api/public/bridge/strategies': typeof ApiPublicBridgeStrategiesRoute
+  '/api/public/bridge/verify': typeof ApiPublicBridgeVerifyRoute
+  '/api/public/bridge/ws': typeof ApiPublicBridgeWsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -139,7 +176,11 @@ export interface FileRouteTypes {
     | '/api/public/bridge/ai-analysis'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
+    | '/api/public/bridge/service-logs'
+    | '/api/public/bridge/status'
     | '/api/public/bridge/strategies'
+    | '/api/public/bridge/verify'
+    | '/api/public/bridge/ws'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -152,7 +193,11 @@ export interface FileRouteTypes {
     | '/api/public/bridge/ai-analysis'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
+    | '/api/public/bridge/service-logs'
+    | '/api/public/bridge/status'
     | '/api/public/bridge/strategies'
+    | '/api/public/bridge/verify'
+    | '/api/public/bridge/ws'
   id:
     | '__root__'
     | '/'
@@ -166,7 +211,11 @@ export interface FileRouteTypes {
     | '/api/public/bridge/ai-analysis'
     | '/api/public/bridge/commands'
     | '/api/public/bridge/heartbeat'
+    | '/api/public/bridge/service-logs'
+    | '/api/public/bridge/status'
     | '/api/public/bridge/strategies'
+    | '/api/public/bridge/verify'
+    | '/api/public/bridge/ws'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -177,7 +226,11 @@ export interface RootRouteChildren {
   ApiPublicBridgeAiAnalysisRoute: typeof ApiPublicBridgeAiAnalysisRoute
   ApiPublicBridgeCommandsRoute: typeof ApiPublicBridgeCommandsRoute
   ApiPublicBridgeHeartbeatRoute: typeof ApiPublicBridgeHeartbeatRoute
+  ApiPublicBridgeServiceLogsRoute: typeof ApiPublicBridgeServiceLogsRoute
+  ApiPublicBridgeStatusRoute: typeof ApiPublicBridgeStatusRoute
   ApiPublicBridgeStrategiesRoute: typeof ApiPublicBridgeStrategiesRoute
+  ApiPublicBridgeVerifyRoute: typeof ApiPublicBridgeVerifyRoute
+  ApiPublicBridgeWsRoute: typeof ApiPublicBridgeWsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -238,11 +291,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAccountsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/bridge/ws': {
+      id: '/api/public/bridge/ws'
+      path: '/api/public/bridge/ws'
+      fullPath: '/api/public/bridge/ws'
+      preLoaderRoute: typeof ApiPublicBridgeWsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/bridge/verify': {
+      id: '/api/public/bridge/verify'
+      path: '/api/public/bridge/verify'
+      fullPath: '/api/public/bridge/verify'
+      preLoaderRoute: typeof ApiPublicBridgeVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/bridge/strategies': {
       id: '/api/public/bridge/strategies'
       path: '/api/public/bridge/strategies'
       fullPath: '/api/public/bridge/strategies'
       preLoaderRoute: typeof ApiPublicBridgeStrategiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/bridge/status': {
+      id: '/api/public/bridge/status'
+      path: '/api/public/bridge/status'
+      fullPath: '/api/public/bridge/status'
+      preLoaderRoute: typeof ApiPublicBridgeStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/bridge/service-logs': {
+      id: '/api/public/bridge/service-logs'
+      path: '/api/public/bridge/service-logs'
+      fullPath: '/api/public/bridge/service-logs'
+      preLoaderRoute: typeof ApiPublicBridgeServiceLogsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/bridge/heartbeat': {
@@ -294,7 +375,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicBridgeAiAnalysisRoute: ApiPublicBridgeAiAnalysisRoute,
   ApiPublicBridgeCommandsRoute: ApiPublicBridgeCommandsRoute,
   ApiPublicBridgeHeartbeatRoute: ApiPublicBridgeHeartbeatRoute,
+  ApiPublicBridgeServiceLogsRoute: ApiPublicBridgeServiceLogsRoute,
+  ApiPublicBridgeStatusRoute: ApiPublicBridgeStatusRoute,
   ApiPublicBridgeStrategiesRoute: ApiPublicBridgeStrategiesRoute,
+  ApiPublicBridgeVerifyRoute: ApiPublicBridgeVerifyRoute,
+  ApiPublicBridgeWsRoute: ApiPublicBridgeWsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

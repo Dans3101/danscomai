@@ -37,11 +37,12 @@ import protocol as P
 
 load_dotenv()
 
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
-log = logging.getLogger("hub")
+import logging_setup
+
+log = logging_setup.setup("hub")
+
+# Warnings/errors reported by connected Windows Companions (last 24h).
+COMPANION_LOGS: list[dict[str, Any]] = []
 
 HUB_HOST = os.environ.get("HUB_HOST", "0.0.0.0")
 HUB_WS_PORT = int(os.environ.get("HUB_WS_PORT", "8765"))
@@ -173,6 +174,16 @@ async def ws_handler(ws) -> None:
                 session.resolve(msg)
             elif t == P.STATUS:
                 session.status[str(msg.get("account_id"))] = msg
+            elif t == "log":
+                for e in (msg.get("entries") or [])[:100]:
+                    COMPANION_LOGS.append({
+                        "ts": float(e.get("ts") or time.time()),
+                        "ts_iso": e.get("ts_iso"),
+                        "level": e.get("level", "error"),
+                        "service": "companion",
+                        "message": str(e.get("message", ""))[:4000],
+                    })
+                del COMPANION_LOGS[:-2000]
             elif t == P.PING:
                 await ws.send(json.dumps({"type": P.PONG, "ts": time.time()}))
     except asyncio.TimeoutError:
@@ -205,6 +216,14 @@ class RPCHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path.startswith("/status"):
             self._send({"ok": True, **REG.snapshot()})
+        elif self.path.startswith("/logs"):
+            cutoff = time.time() - 24 * 3600
+            entries = [
+                {**e, "service": "hub", "ts_iso": e.get("ts_iso")}
+                for e in logging_setup.recent_errors()
+            ] + [e for e in COMPANION_LOGS if e["ts"] >= cutoff]
+            entries.sort(key=lambda e: e["ts"], reverse=True)
+            self._send({"ok": True, "entries": entries[:500]})
         elif self.path.startswith("/health"):
             self._send({"ok": True, "companions": len(REG.sessions)})
         else:

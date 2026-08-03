@@ -41,7 +41,7 @@ for arg in "$@"; do
 done
 [[ -t 0 ]] || NON_INTERACTIVE=1
 
-STEP=0; TOTAL=8
+STEP=0; TOTAL=9
 c() { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }
 step()  { STEP=$((STEP+1)); c '1;36' "[${STEP}/${TOTAL}] $*"; }
 ok()    { c '1;32' "      ok — $*"; }
@@ -86,6 +86,68 @@ PYV="$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
 python3 -c 'import sys;raise SystemExit(0 if sys.version_info>=(3,10) else 1)' \
   || die "Python ${PYV} is too old — the bridge needs Python 3.10+"
 ok "python ${PYV}, curl, jq installed"
+
+# -------------------------------------------------------------- 2b preflight
+step "preflight checks (privileges, DNS, ports, firewall, certificates)"
+PRE_FAIL=0
+
+# DNS + outbound HTTPS
+if command -v getent >/dev/null && ! getent hosts lovable.app >/dev/null 2>&1; then
+  warn "DNS lookup for lovable.app failed — check /etc/resolv.conf"
+fi
+curl -sf --max-time 10 -o /dev/null https://api.github.com >/dev/null 2>&1 \
+  && ok "outbound HTTPS works" \
+  || { warn "outbound HTTPS to the internet seems blocked — the bridge cannot reach the dashboard"; PRE_FAIL=1; }
+
+# Port availability for the Companion Hub + loopback RPC
+PRE_WS_PORT="${HUB_WS_PORT:-$(grep -E '^HUB_WS_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)}"
+PRE_WS_PORT="${PRE_WS_PORT:-8765}"
+PRE_RPC_PORT="${HUB_RPC_PORT:-8766}"
+port_busy() {
+  if command -v ss >/dev/null 2>&1; then ss -ltn "( sport = :$1 )" 2>/dev/null | tail -n +2 | grep -q .; else return 1; fi
+}
+for prt in "$PRE_WS_PORT" "$PRE_RPC_PORT"; do
+  if port_busy "$prt"; then
+    OWNER="$(ss -ltnp "( sport = :$prt )" 2>/dev/null | tail -n +2 | sed 's/.*users:((//' | cut -d, -f1)"
+    if systemctl is-active --quiet mt5-companion-hub; then
+      ok "port ${prt} in use by our own hub (will be restarted)"
+    else
+      die "port ${prt} is already in use by ${OWNER:-another process}. Free it or set HUB_WS_PORT/HUB_RPC_PORT in ${ENV_FILE}."
+    fi
+  else
+    ok "port ${prt} is free"
+  fi
+done
+
+# Firewall
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q active; then
+  ufw status | grep -q "${PRE_WS_PORT}" \
+    && ok "ufw already allows ${PRE_WS_PORT}/tcp" \
+    || warn "ufw is active and ${PRE_WS_PORT}/tcp is not allowed yet — this installer will open it"
+else
+  warn "ufw inactive — make sure the CLOUD firewall allows TCP ${PRE_WS_PORT} inbound from your Windows host"
+fi
+
+# TLS certificates (only when the hub is asked to terminate TLS itself)
+CERT="$(grep -E '^HUB_TLS_CERT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)"
+KEY="$(grep -E '^HUB_TLS_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || true)"
+if [[ -n "$CERT" || -n "$KEY" ]]; then
+  [[ -r "$CERT" ]] || die "HUB_TLS_CERT '$CERT' is missing or unreadable"
+  [[ -r "$KEY"  ]] || die "HUB_TLS_KEY '$KEY' is missing or unreadable"
+  if command -v openssl >/dev/null 2>&1; then
+    END="$(openssl x509 -enddate -noout -in "$CERT" 2>/dev/null | cut -d= -f2)"
+    openssl x509 -checkend 604800 -noout -in "$CERT" >/dev/null 2>&1 \
+      && ok "TLS certificate valid (expires ${END})" \
+      || warn "TLS certificate expires within 7 days (${END}) — renew it"
+  fi
+else
+  warn "no HUB_TLS_CERT/HUB_TLS_KEY set — the hub will listen on plain ws://. Put nginx/caddy in front for wss:// (recommended)."
+fi
+
+# Disk + memory sanity
+AVAIL_MB=$(df -Pm "$(dirname "$BRIDGE_DIR")" | awk 'NR==2{print $4}')
+[[ "${AVAIL_MB:-0}" -ge 512 ]] || warn "only ${AVAIL_MB}MB free disk — logs and the venv need ~500MB"
+[[ $PRE_FAIL -eq 0 ]] || warn "preflight reported issues above; continuing (services retry automatically)"
 
 # ------------------------------------------------------------------ 3 code
 step "syncing bridge code to ${BRIDGE_DIR}"
@@ -147,11 +209,24 @@ setenv COMPANION_TOKENS "$(getenv COMPANION_TOKENS || true)"
 setenv HUB_WS_PORT    "${HUB_WS_PORT:-8765}"
 setenv MT5_BACKEND    "$(getenv MT5_BACKEND || echo auto)"
 [[ -n "$(getenv MT5_BACKEND)" ]] || setenv MT5_BACKEND auto
+setenv LOG_DIR "${BRIDGE_DIR}/logs"
 chown "$BRIDGE_USER":"$BRIDGE_USER" "$ENV_FILE"; chmod 600 "$ENV_FILE"
 ok "configuration written (mode 600, owner ${BRIDGE_USER})"
 
 # ------------------------------------------------------- 6 backend reachable
 step "verifying the dashboard backend is reachable"
+VERIFY_URL="${APP_BASE_URL}/api/public/bridge/verify"
+VCODE="$(curl -s -o /tmp/mt5-verify.out -w '%{http_code}' --max-time 20 -X POST "$VERIFY_URL" \
+  -H 'content-type: application/json' \
+  -d "{\"account_id\":\"${ACCOUNT_ID}\",\"bridge_token\":\"${BRIDGE_TOKEN}\"}" || echo 000)"
+case "$VCODE" in
+  200) ok "bridge token verified by the backend" ;;
+  401) die "backend rejected the Bridge Token (HTTP 401). Copy Account ID + Bridge Token again from Dashboard → Accounts → Bridge config." ;;
+  404) die "verify endpoint not found at ${VERIFY_URL}. Publish the dashboard, then re-run this installer." ;;
+  000) die "cannot reach ${APP_BASE_URL} — DNS/firewall/outbound HTTPS blocked on this VPS." ;;
+  *)   warn "verify endpoint answered HTTP ${VCODE}: $(head -c 200 /tmp/mt5-verify.out)" ;;
+esac
+rm -f /tmp/mt5-verify.out
 HB_URL="${APP_BASE_URL}/api/public/bridge/heartbeat"
 CODE="$(curl -s -o /tmp/mt5-hb.out -w '%{http_code}' --max-time 20 -X POST "$HB_URL" \
   -H 'content-type: application/json' \
@@ -173,6 +248,12 @@ for unit in "${UNITS[@]}"; do
 done
 systemctl daemon-reload
 systemctl enable -q "${UNITS[@]}"
+install -d -o "$BRIDGE_USER" -g "$BRIDGE_USER" -m 750 "${BRIDGE_DIR}/logs"
+if [[ -f "$BRIDGE_DIR/systemd/mt5-bridge.logrotate" ]]; then
+  sed -e "s|__BRIDGE_DIR__|${BRIDGE_DIR}|g" -e "s|__USER__|${BRIDGE_USER}|g" \
+    "$BRIDGE_DIR/systemd/mt5-bridge.logrotate" > /etc/logrotate.d/mt5-bridge
+  ok "log rotation installed (/etc/logrotate.d/mt5-bridge, 14 days, 10MB)"
+fi
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q active; then
   ufw allow "$(getenv HUB_WS_PORT)/tcp" >/dev/null 2>&1 || true
   ok "ufw: opened $(getenv HUB_WS_PORT)/tcp for the Windows Companion"
