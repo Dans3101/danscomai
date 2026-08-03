@@ -27,6 +27,7 @@ export const Route = createFileRoute("/api/public/bridge/verify")({
   server: {
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
+      GET: async () => json({ ok: false, error: "method_not_allowed", use: "POST" }, 405),
       POST: async ({ request }) => {
         const body = await request.json().catch(() => null);
         const parsed = Payload.safeParse(body);

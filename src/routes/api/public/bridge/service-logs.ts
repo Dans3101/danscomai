@@ -37,6 +37,7 @@ export const Route = createFileRoute("/api/public/bridge/service-logs")({
   server: {
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: CORS }),
+      GET: async () => json({ ok: false, error: "method_not_allowed", use: "POST" }, 405),
       POST: async ({ request }) => {
         const auth = request.headers.get("authorization") ?? "";
         const headerToken = auth.startsWith("Bearer ") ? auth.slice(7) : "";
