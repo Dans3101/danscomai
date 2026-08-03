@@ -14,7 +14,7 @@ const CORS = {
 const Payload = z.object({
   account_id: z.string().uuid(),
   bridge_token: z.string().min(8).optional(),
-  connection_status: z.enum(["connected", "disconnected", "error"]).optional(),
+  connection_status: z.enum(["connected", "connecting", "disconnected", "error"]).optional(),
   snapshot: z
     .object({
       balance: z.number().nullable().optional(),
