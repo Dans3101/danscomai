@@ -39,7 +39,7 @@ export const Route = createFileRoute("/api/public/bridge/verify")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: account } = await supabaseAdmin
           .from("mt5_accounts")
-          .select("id, broker_name, connection_status, bridge_token")
+          .select("id, broker, connection_status, bridge_token")
           .eq("id", parsed.data.account_id)
           .maybeSingle();
 
@@ -49,7 +49,7 @@ export const Route = createFileRoute("/api/public/bridge/verify")({
         return json({
           ok: true,
           account_id: account.id,
-          broker_name: account.broker_name,
+          broker: account.broker,
           connection_status: account.connection_status,
           server_time: new Date().toISOString(),
         });

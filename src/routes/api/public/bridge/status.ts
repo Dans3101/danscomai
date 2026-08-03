@@ -50,7 +50,7 @@ export const Route = createFileRoute("/api/public/bridge/status")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data: account } = await supabaseAdmin
           .from("mt5_accounts")
-          .select("id, broker_name, server, connection_status, last_seen_at, bridge_token")
+          .select("id, broker, server, connection_status, last_seen_at, bridge_token")
           .eq("id", accountId)
           .maybeSingle();
         if (!account || account.bridge_token !== token) {
@@ -78,7 +78,7 @@ export const Route = createFileRoute("/api/public/bridge/status")({
           server_time: now,
           account: {
             id: account.id,
-            broker_name: account.broker_name,
+            broker: account.broker,
             server: account.server,
             connection_status: stale ? "stale" : account.connection_status,
             last_seen_at: account.last_seen_at,
