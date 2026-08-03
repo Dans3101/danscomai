@@ -1,0 +1,13 @@
+# Installed to /etc/logrotate.d/mt5-bridge by bridge/scripts/install.sh
+__BRIDGE_DIR__/logs/*.log {
+    daily
+    rotate 14
+    size 10M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su __USER__ __USER__
+    create 0640 __USER__ __USER__
+}
