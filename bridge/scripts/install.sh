@@ -172,6 +172,10 @@ step "configuring ${ENV_FILE}"
   "$BRIDGE_DIR/.env.example" "$ENV_FILE"; }
 
 getenv() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
+# repair a previously malformed .env: CRLF, joined KEY=VAL pairs, missing EOF newline
+sed -i 's/\r$//' "$ENV_FILE"
+sed -i -E 's/([^[:space:]=])([A-Z][A-Z0-9_]*=)/\1\n\2/g' "$ENV_FILE"
+[[ -z "$(tail -c 1 "$ENV_FILE")" ]] || printf '\n' >> "$ENV_FILE"
 setenv() {
   local k="$1" v="$2"
   # guarantee the file ends with a newline so appends never join two vars
