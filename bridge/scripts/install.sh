@@ -339,6 +339,7 @@ if [[ $NO_START -eq 0 ]]; then
 fi
 [[ $FAIL -eq 0 ]] || die "one or more services are unhealthy (logs above)"
 
+FINISHED=1
 trap - ERR
 IP="$(curl -s --max-time 5 ifconfig.me || hostname -I | awk '{print $1}')"
 cat <<EOF
