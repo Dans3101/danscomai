@@ -212,7 +212,9 @@ ask() { # ask VAR "Prompt" [default]
   if [[ $NON_INTERACTIVE -eq 1 || $UPGRADE -eq 1 ]]; then
     printf -v "$var" '%s' "$cur"; return
   fi
-  read -r -p "      ${prompt}${cur:+ [${cur}]}: " reply || true
+  local reply=""
+  # Read from the terminal, never from the script's own stdin.
+  read -r -p "      ${prompt}${cur:+ [${cur}]}: " reply < "$TTY_IN" || true
   printf -v "$var" '%s' "${reply:-$cur}"
 }
 
