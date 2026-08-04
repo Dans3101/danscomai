@@ -93,8 +93,8 @@ ok "user ready"
 # ------------------------------------------------------------ 2 system deps
 step "installing system packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq --no-install-recommends \
+apt-get update -qq </dev/null
+apt-get install -y -qq --no-install-recommends </dev/null \
   ca-certificates curl rsync python3 python3-venv python3-pip coreutils jq \
   >/dev/null || die "apt-get failed — check network/DNS on this VPS"
 PYV="$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
