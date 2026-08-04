@@ -39,16 +39,31 @@ for arg in "$@"; do
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
-[[ -t 0 ]] || NON_INTERACTIVE=1
+# Prompting source. When the script is piped (curl | sudo bash) stdin is the
+# script itself — reading from it swallows the rest of the file and the
+# installer appears to "exit" silently right after the last prompt.
+# Always prompt from the real terminal when one exists.
+TTY_IN=""
+if [[ -t 0 ]]; then
+  TTY_IN="/dev/stdin"
+elif [[ -r /dev/tty ]] && : >/dev/tty 2>/dev/null; then
+  TTY_IN="/dev/tty"
+fi
+[[ -n "$TTY_IN" ]] || NON_INTERACTIVE=1
 
 STEP=0; TOTAL=9
 c() { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }
-step()  { STEP=$((STEP+1)); c '1;36' "[${STEP}/${TOTAL}] $*"; }
+step()  { STEP=$((STEP+1)); LAST_STEP="$*"; c '1;36' "[${STEP}/${TOTAL}] $*"; }
 ok()    { c '1;32' "      ok — $*"; }
 warn()  { c '1;33' "      ! $*"; }
-die()   { c '1;31' "ERROR: $*"; echo; c '1;31' "Installation aborted. Nothing was started."; exit 1; }
+die()   { FINISHED=1; c '1;31' "ERROR: $*"; echo; c '1;31' "Installation aborted. Nothing was started."; exit 1; }
 
-trap 'die "unexpected failure on line $LINENO. Re-run with: sudo bash $0"' ERR
+FINISHED=0
+LAST_STEP="startup"
+trap 'rc=$?; FINISHED=1; c "1;31" "ERROR: unexpected failure at step ${STEP}/${TOTAL} (${LAST_STEP}), line ${LINENO}: ${BASH_COMMAND} (exit ${rc})"; exit "$rc"' ERR
+# Catch any silent early exit (e.g. a command swallowing stdin) so the user
+# never sees the installer simply stop with no explanation.
+trap '[[ $FINISHED -eq 1 ]] || { c "1;31" "ERROR: installer stopped unexpectedly after step ${STEP}/${TOTAL} (${LAST_STEP})."; c "1;33" "      Re-run and capture output:  sudo bash '"$0"' --upgrade 2>&1 | tee /tmp/mt5-install.log"; }' EXIT
 
 [[ $EUID -eq 0 ]] || die "run as root:  sudo bash $0"
 . /etc/os-release 2>/dev/null || true
@@ -78,8 +93,8 @@ ok "user ready"
 # ------------------------------------------------------------ 2 system deps
 step "installing system packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq --no-install-recommends \
+apt-get update -qq </dev/null
+apt-get install -y -qq --no-install-recommends </dev/null \
   ca-certificates curl rsync python3 python3-venv python3-pip coreutils jq \
   >/dev/null || die "apt-get failed — check network/DNS on this VPS"
 PYV="$(python3 -c 'import sys;print("%d.%d"%sys.version_info[:2])')"
@@ -163,8 +178,8 @@ ok "code in place"
 # ----------------------------------------------------------------- 4 venv
 step "creating virtualenv + installing Python packages"
 [[ -x "$BRIDGE_DIR/.venv/bin/python" ]] || sudo -u "$BRIDGE_USER" python3 -m venv "$BRIDGE_DIR/.venv"
-sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q --upgrade pip wheel
-sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q -r "$BRIDGE_DIR/requirements.txt" \
+sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q --upgrade pip wheel </dev/null
+sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q -r "$BRIDGE_DIR/requirements.txt" </dev/null \
   || die "pip install failed — see the output above"
 ok "$(sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" list --format=freeze | wc -l) packages installed"
 
@@ -197,7 +212,9 @@ ask() { # ask VAR "Prompt" [default]
   if [[ $NON_INTERACTIVE -eq 1 || $UPGRADE -eq 1 ]]; then
     printf -v "$var" '%s' "$cur"; return
   fi
-  read -r -p "      ${prompt}${cur:+ [${cur}]}: " reply || true
+  local reply=""
+  # Read from the terminal, never from the script's own stdin.
+  read -r -p "      ${prompt}${cur:+ [${cur}]}: " reply < "$TTY_IN" || true
   printf -v "$var" '%s' "${reply:-$cur}"
 }
 
@@ -322,6 +339,7 @@ if [[ $NO_START -eq 0 ]]; then
 fi
 [[ $FAIL -eq 0 ]] || die "one or more services are unhealthy (logs above)"
 
+FINISHED=1
 trap - ERR
 IP="$(curl -s --max-time 5 ifconfig.me || hostname -I | awk '{print $1}')"
 cat <<EOF
