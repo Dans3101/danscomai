@@ -102,7 +102,9 @@ curl -sf --max-time 10 -o /dev/null https://api.github.com >/dev/null 2>&1 \
 # Port availability for the Companion Hub + loopback RPC
 PRE_WS_PORT="${HUB_WS_PORT:-$(grep -E '^HUB_WS_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)}"
 PRE_WS_PORT="${PRE_WS_PORT:-8765}"
+[[ "$PRE_WS_PORT" =~ ^[0-9]+$ ]] || PRE_WS_PORT=8765
 PRE_RPC_PORT="${HUB_RPC_PORT:-8766}"
+[[ "$PRE_RPC_PORT" =~ ^[0-9]+$ ]] || PRE_RPC_PORT=8766
 port_busy() {
   if command -v ss >/dev/null 2>&1; then ss -ltn "( sport = :$1 )" 2>/dev/null | tail -n +2 | grep -q .; else return 1; fi
 }
