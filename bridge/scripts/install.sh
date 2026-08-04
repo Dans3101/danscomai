@@ -176,7 +176,8 @@ step "configuring ${ENV_FILE}"
 getenv() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
 # repair a previously malformed .env: CRLF, joined KEY=VAL pairs, missing EOF newline
 sed -i 's/\r$//' "$ENV_FILE"
-sed -i -E 's/([^[:space:]=])([A-Z][A-Z0-9_]*=)/\1\n\2/g' "$ENV_FILE"
+awk '{s=$0; while(1){ e=index(s,"="); if(e==0 || substr(s,1,e-1) !~ /^[A-Z][A-Z0-9_]*$/){print s; break} rest=substr(s,e+1); if(match(rest,/[A-Z][A-Z0-9_]*=/)){p=e+RSTART; print substr(s,1,p-1); s=substr(s,p)} else {print s; break} }}' \
+  "$ENV_FILE" > "${ENV_FILE}.tmp" && mv "${ENV_FILE}.tmp" "$ENV_FILE"
 [[ -z "$(tail -c 1 "$ENV_FILE")" ]] || printf '\n' >> "$ENV_FILE"
 setenv() {
   local k="$1" v="$2"
