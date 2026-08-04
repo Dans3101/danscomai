@@ -174,6 +174,10 @@ step "configuring ${ENV_FILE}"
 getenv() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"'; }
 setenv() {
   local k="$1" v="$2"
+  # guarantee the file ends with a newline so appends never join two vars
+  if [[ -s "$ENV_FILE" ]] && [[ -n "$(tail -c 1 "$ENV_FILE")" ]]; then
+    printf '\n' >> "$ENV_FILE"
+  fi
   if grep -qE "^${k}=" "$ENV_FILE"; then
     sed -i "s|^${k}=.*|${k}=${v}|" "$ENV_FILE"
   else
@@ -193,12 +197,28 @@ ask() { # ask VAR "Prompt" [default]
 ask APP_BASE_URL   "Dashboard URL (https://…lovable.app)"
 ask ACCOUNT_ID     "Account ID (UUID from the Accounts page)"
 ask BRIDGE_TOKEN   "Bridge Token (Accounts page)"
-ask HUB_WS_PORT    "Companion WebSocket port" 8765
+ask HUB_WS_PORT    "Companion WebSocket PORT NUMBER only (e.g. 8765)" 8765
+ask COMPANION_WS_URL "Public Companion WebSocket URL (optional, e.g. wss://host/companion)" ""
 
 [[ -n "${APP_BASE_URL}" ]] || die "APP_BASE_URL is required (Dashboard → Accounts → Bridge config)"
 [[ "${APP_BASE_URL}" =~ ^https?:// ]] || die "APP_BASE_URL must start with http:// or https://"
 [[ -n "${ACCOUNT_ID}" ]]   || die "ACCOUNT_ID is required (Dashboard → Accounts)"
 [[ -n "${BRIDGE_TOKEN}" ]] || die "BRIDGE_TOKEN is required (Dashboard → Accounts → Bridge config)"
+
+# HUB_WS_PORT must be an integer. If a URL was pasted, extract its port (or
+# fall back to 8765) and keep the URL in COMPANION_WS_URL instead.
+if [[ ! "${HUB_WS_PORT}" =~ ^[0-9]+$ ]]; then
+  if [[ "${HUB_WS_PORT}" =~ ^(ws|wss|http|https):// ]]; then
+    [[ -n "${COMPANION_WS_URL}" ]] || COMPANION_WS_URL="${HUB_WS_PORT}"
+    EXTRACTED="$(printf '%s' "${HUB_WS_PORT}" | sed -nE 's|^[a-z]+://[^/:]+:([0-9]+).*|\1|p')"
+    HUB_WS_PORT="${EXTRACTED:-8765}"
+    warn "a URL was given for the port — stored it as COMPANION_WS_URL and using HUB_WS_PORT=${HUB_WS_PORT}"
+  else
+    warn "invalid HUB_WS_PORT '${HUB_WS_PORT}' — falling back to 8765"
+    HUB_WS_PORT=8765
+  fi
+fi
+[[ "${HUB_WS_PORT}" -ge 1 && "${HUB_WS_PORT}" -le 65535 ]] || die "HUB_WS_PORT must be between 1 and 65535"
 
 APP_BASE_URL="${APP_BASE_URL%/}"
 setenv APP_BASE_URL   "$APP_BASE_URL"
@@ -206,10 +226,14 @@ setenv ACCOUNT_ID     "$ACCOUNT_ID"
 setenv BRIDGE_TOKEN   "$BRIDGE_TOKEN"
 setenv COMPANION_TOKENS "$(getenv COMPANION_TOKENS || true)"
 [[ -n "$(getenv COMPANION_TOKENS)" ]] || setenv COMPANION_TOKENS "$BRIDGE_TOKEN"
-setenv HUB_WS_PORT    "${HUB_WS_PORT:-8765}"
+setenv HUB_WS_PORT    "${HUB_WS_PORT}"
+[[ -z "${COMPANION_WS_URL}" ]] || setenv COMPANION_WS_URL "${COMPANION_WS_URL}"
 setenv MT5_BACKEND    "$(getenv MT5_BACKEND || echo auto)"
 [[ -n "$(getenv MT5_BACKEND)" ]] || setenv MT5_BACKEND auto
 setenv LOG_DIR "${BRIDGE_DIR}/logs"
+# final sanity pass: no stray joined lines, no CRLF
+sed -i 's/\r$//' "$ENV_FILE"
+grep -qE '^HUB_WS_PORT=[0-9]+$' "$ENV_FILE" || die "generated .env has an invalid HUB_WS_PORT — inspect ${ENV_FILE}"
 chown "$BRIDGE_USER":"$BRIDGE_USER" "$ENV_FILE"; chmod 600 "$ENV_FILE"
 ok "configuration written (mode 600, owner ${BRIDGE_USER})"
 
