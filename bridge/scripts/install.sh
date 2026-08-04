@@ -39,16 +39,31 @@ for arg in "$@"; do
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
-[[ -t 0 ]] || NON_INTERACTIVE=1
+# Prompting source. When the script is piped (curl | sudo bash) stdin is the
+# script itself — reading from it swallows the rest of the file and the
+# installer appears to "exit" silently right after the last prompt.
+# Always prompt from the real terminal when one exists.
+TTY_IN=""
+if [[ -t 0 ]]; then
+  TTY_IN="/dev/stdin"
+elif [[ -r /dev/tty ]] && : >/dev/tty 2>/dev/null; then
+  TTY_IN="/dev/tty"
+fi
+[[ -n "$TTY_IN" ]] || NON_INTERACTIVE=1
 
 STEP=0; TOTAL=9
 c() { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }
-step()  { STEP=$((STEP+1)); c '1;36' "[${STEP}/${TOTAL}] $*"; }
+step()  { STEP=$((STEP+1)); LAST_STEP="$*"; c '1;36' "[${STEP}/${TOTAL}] $*"; }
 ok()    { c '1;32' "      ok — $*"; }
 warn()  { c '1;33' "      ! $*"; }
-die()   { c '1;31' "ERROR: $*"; echo; c '1;31' "Installation aborted. Nothing was started."; exit 1; }
+die()   { FINISHED=1; c '1;31' "ERROR: $*"; echo; c '1;31' "Installation aborted. Nothing was started."; exit 1; }
 
-trap 'die "unexpected failure on line $LINENO. Re-run with: sudo bash $0"' ERR
+FINISHED=0
+LAST_STEP="startup"
+trap 'rc=$?; FINISHED=1; c "1;31" "ERROR: unexpected failure at step ${STEP}/${TOTAL} (${LAST_STEP}), line ${LINENO}: ${BASH_COMMAND} (exit ${rc})"; exit "$rc"' ERR
+# Catch any silent early exit (e.g. a command swallowing stdin) so the user
+# never sees the installer simply stop with no explanation.
+trap '[[ $FINISHED -eq 1 ]] || { c "1;31" "ERROR: installer stopped unexpectedly after step ${STEP}/${TOTAL} (${LAST_STEP})."; c "1;33" "      Re-run and capture output:  sudo bash '"$0"' --upgrade 2>&1 | tee /tmp/mt5-install.log"; }' EXIT
 
 [[ $EUID -eq 0 ]] || die "run as root:  sudo bash $0"
 . /etc/os-release 2>/dev/null || true
