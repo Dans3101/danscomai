@@ -178,8 +178,8 @@ ok "code in place"
 # ----------------------------------------------------------------- 4 venv
 step "creating virtualenv + installing Python packages"
 [[ -x "$BRIDGE_DIR/.venv/bin/python" ]] || sudo -u "$BRIDGE_USER" python3 -m venv "$BRIDGE_DIR/.venv"
-sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q --upgrade pip wheel
-sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q -r "$BRIDGE_DIR/requirements.txt" \
+sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q --upgrade pip wheel </dev/null
+sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" install -q -r "$BRIDGE_DIR/requirements.txt" </dev/null \
   || die "pip install failed — see the output above"
 ok "$(sudo -u "$BRIDGE_USER" "$BRIDGE_DIR/.venv/bin/pip" list --format=freeze | wc -l) packages installed"
 
