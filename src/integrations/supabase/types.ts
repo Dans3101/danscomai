@@ -149,6 +149,50 @@ export type Database = {
           },
         ]
       }
+      market_ticks: {
+        Row: {
+          account_id: string
+          ask: number | null
+          bid: number | null
+          digits: number | null
+          id: string
+          spread_points: number | null
+          symbol: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          ask?: number | null
+          bid?: number | null
+          digits?: number | null
+          id?: string
+          spread_points?: number | null
+          symbol: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          ask?: number | null
+          bid?: number | null
+          digits?: number | null
+          id?: string
+          spread_points?: number | null
+          symbol?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_ticks_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "mt5_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mt5_accounts: {
         Row: {
           bridge_token: string | null
@@ -340,12 +384,17 @@ export type Database = {
         Row: {
           account_id: string
           created_at: string
+          daily_loss_percent: number
           enabled: boolean
           id: string
           lot_size: number
           max_daily_loss: number | null
+          max_lot: number
+          max_margin_percent: number
           max_open_trades: number
+          min_equity: number
           name: string
+          risk_percent: number
           rule_params: Json
           rule_type: string
           stop_loss_pips: number | null
@@ -354,17 +403,23 @@ export type Database = {
           timeframe: string
           trailing_stop_pips: number | null
           updated_at: string
+          use_risk_sizing: boolean
           user_id: string
         }
         Insert: {
           account_id: string
           created_at?: string
+          daily_loss_percent?: number
           enabled?: boolean
           id?: string
           lot_size?: number
           max_daily_loss?: number | null
+          max_lot?: number
+          max_margin_percent?: number
           max_open_trades?: number
+          min_equity?: number
           name: string
+          risk_percent?: number
           rule_params?: Json
           rule_type: string
           stop_loss_pips?: number | null
@@ -373,17 +428,23 @@ export type Database = {
           timeframe?: string
           trailing_stop_pips?: number | null
           updated_at?: string
+          use_risk_sizing?: boolean
           user_id: string
         }
         Update: {
           account_id?: string
           created_at?: string
+          daily_loss_percent?: number
           enabled?: boolean
           id?: string
           lot_size?: number
           max_daily_loss?: number | null
+          max_lot?: number
+          max_margin_percent?: number
           max_open_trades?: number
+          min_equity?: number
           name?: string
+          risk_percent?: number
           rule_params?: Json
           rule_type?: string
           stop_loss_pips?: number | null
@@ -392,6 +453,7 @@ export type Database = {
           timeframe?: string
           trailing_stop_pips?: number | null
           updated_at?: string
+          use_risk_sizing?: boolean
           user_id?: string
         }
         Relationships: [
