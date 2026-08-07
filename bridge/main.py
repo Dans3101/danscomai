@@ -194,7 +194,32 @@ def collect_state() -> dict[str, Any]:
             "closed_at": iso(d.time),
         })
     payload["closed_trades"] = closed
+    payload["ticks"] = collect_ticks(positions)
     return payload
+
+
+def collect_ticks(positions) -> list[dict[str, Any]]:
+    """Latest bid/ask for every symbol we care about (max 20)."""
+    symbols = {p.symbol for p in positions} | set(_TICK_SYMBOLS)
+    out: list[dict[str, Any]] = []
+    for sym in list(symbols)[:20]:
+        try:
+            mt5.symbol_select(sym, True)
+            t = mt5.symbol_info_tick(sym)
+            info = mt5.symbol_info(sym)
+            if not t:
+                continue
+            point = float(getattr(info, "point", 0) or 0) or 0.01
+            out.append({
+                "symbol": sym,
+                "bid": float(t.bid),
+                "ask": float(t.ask),
+                "spread_points": round((float(t.ask) - float(t.bid)) / point, 1),
+                "digits": int(getattr(info, "digits", 2) or 2),
+            })
+        except Exception:  # noqa: BLE001
+            continue
+    return out
 
 
 def _order_type_name(t: int) -> str:
