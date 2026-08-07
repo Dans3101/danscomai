@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 import { Activity, Wifi, WifiOff } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { TradePanel } from "@/components/TradePanel";
+import { sendBridgeCommand } from "@/lib/mt5.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -31,6 +35,10 @@ type Trade = {
   id: string; ticket: number; symbol: string; side: string; volume: number;
   profit: number | null; closed_at: string | null;
 };
+type Tick = {
+  symbol: string; bid: number | null; ask: number | null;
+  spread_points: number | null; updated_at: string;
+};
 
 function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -39,6 +47,8 @@ function DashboardPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [history, setHistory] = useState<Trade[]>([]);
+  const [ticks, setTicks] = useState<Tick[]>([]);
+  const send = useServerFn(sendBridgeCommand);
 
   // load accounts once
   useEffect(() => {
