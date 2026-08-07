@@ -74,6 +74,18 @@ const Payload = z.object({
       }),
     )
     .optional(),
+  ticks: z
+    .array(
+      z.object({
+        symbol: z.string(),
+        bid: z.number().nullable().optional(),
+        ask: z.number().nullable().optional(),
+        spread_points: z.number().nullable().optional(),
+        digits: z.number().int().nullable().optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
   logs: z
     .array(
       z.object({
