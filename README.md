@@ -176,3 +176,99 @@ fail with a clear message instead of receiving HTML.
   at `http://127.0.0.1:8766/logs`, shipped by the bridge to
   `/api/public/bridge/service-logs`, and shown in the dashboard under
   **Activity → Service errors (24h)**.
+
+---
+
+## 12. Live trading features (dashboard)
+
+| Feature | Where | How it works |
+| --- | --- | --- |
+| Manual Buy/Sell | Dashboard → **Manual trade · XAUUSD** | queues an `open` command; the bridge executes it on MT5 within one poll (`POLL_SECONDS`, default 3s) and writes the retcode back |
+| Close one position | Dashboard → Open positions → **Close** | queues a `close` command with the ticket |
+| Close everything | Dashboard → **Close all positions** | queues `close_all` (panic button) |
+| Live prices | price tiles above the trade panel | bridge pushes bid/ask/spread every heartbeat into `market_ticks`, streamed to the browser over realtime |
+| Open positions / pending orders | Dashboard tables | replaced on every heartbeat, so they always mirror the terminal |
+| Trade history | Dashboard table | closed deals are upserted by `(account_id, ticket)`; no duplicates on restart |
+| Command status | under the trade panel | `pending → done / failed` with the MT5 result |
+
+### Signal flow (verified end to end)
+
+```
+strategy row (enabled) ─► bridge evaluates 45-rule SMC on XAUUSD M15
+                       ─► AI sentiment audit (Lovable AI) ─► capital guards
+                       ─► mt5.order_send() on Windows ─► heartbeat
+                       ─► positions / trade_history / snapshots ─► dashboard
+manual button ─► bridge_commands (pending) ─► bridge poll ─► order_send ─► result
+```
+
+Only strategies with **rule type = SMC confluence** and **Enabled = on** trade
+automatically. A strategy left on another rule type still streams prices but
+never fires an order.
+
+## 13. Capital management (safe on a $15 account)
+
+Set per strategy under **Strategies → Capital management**:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| Auto lot sizing | on | volume = (equity × risk %) ÷ (SL pips × pip value), rounded to the broker's lot step |
+| Risk per trade | 1 % | of **live equity**, recalculated before every entry |
+| Max lot | 0.01 | hard ceiling regardless of the maths |
+| Equity floor | $5 | trading halts below this balance |
+| Daily drawdown cap | 5 % | of the day's opening equity; halts until the next server day |
+| Max margin used | 20 % | no new entry if margin would exceed this share of equity |
+| Max open trades | 1 | concurrent positions per strategy |
+
+Micro-account guard: if the broker minimum lot (usually 0.01) would risk more
+than **twice** your risk % — and never more than 10 % of equity — the trade is
+skipped and the reason is logged instead of blowing the account. On $15 with a
+300-pip gold stop, 0.01 lots risks about $3, so the bot will trade only when the
+stop distance is small enough; widen the SL or fund the account to trade more
+often.
+
+## 14. What to do on your VPS (after this update)
+
+**Ubuntu (backend + strategy engine)**
+
+```bash
+cd /opt/mt5-bridge            # or wherever you cloned it
+sudo bash install.sh --upgrade      # pulls the new bridge code + deps
+sudo systemctl restart mt5-companion-hub mt5-bridge
+journalctl -u mt5-bridge -f          # watch: "executing open", "SMC entry", capital guard lines
+```
+
+**Windows (Companion + MetaTrader 5)**
+
+```powershell
+cd C:\MT5Companion
+.\install.ps1 -Upgrade
+Get-Service MT5Companion            # must be Running, StartType Automatic
+sc.exe qc MT5Companion              # confirm START_TYPE : 2 AUTO_START
+Get-Content .\logs\companion.log -Tail 50 -Wait
+```
+
+24/7 reboot survival is already configured by the installer: the service is
+**Automatic (Delayed Start)** with failure actions 5 s → 10 s → 30 s, and it
+relaunches `terminal64.exe` and re-logs in whenever MT5 is closed or crashes.
+To prove it: `Restart-Computer`, wait ~2 minutes, and the dashboard should flip
+back to **Connected** on its own.
+
+**In MetaTrader 5 (one time)**
+
+1. Tools → Options → Expert Advisors → **Allow algorithmic trading**.
+2. Toolbar **Algo Trading** button green.
+3. Market Watch → right-click → Show All → confirm your gold symbol
+   (`XAUUSD`, `XAUUSD.m`, `GOLD`… the bridge auto-detects the suffix).
+4. Keep the terminal logged into the same account as the dashboard entry.
+
+**Then, in the dashboard**
+
+1. **Accounts** → account shows *Connected* with live balance/equity.
+2. Price tiles show a moving bid/ask → market data is flowing.
+3. Press **Buy 0.01** once on a demo account → command goes `pending → done`,
+   the position appears in the table, **Close** removes it.
+4. **Strategies** → open your strategy, set rule type **SMC confluence**, fill
+   in the capital-management block, save, then toggle **Enabled**.
+5. Watch **Activity** for `SMC entry`, `AI veto`, and capital-guard messages.
+
+> Run at least a few sessions on a demo account before going live.
