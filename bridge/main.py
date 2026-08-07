@@ -761,9 +761,17 @@ def _evaluate_smc(s: dict[str, Any]) -> None:
     sl = price - sl_pips * pip if bias == "buy" else price + sl_pips * pip
     tp = price + tp_pips * pip if bias == "buy" else price - tp_pips * pip
 
-    log.info("SMC entry %s %s @ %.5f SL %.5f TP %.5f conf=%d", bias, symbol, price, sl, tp, confidence)
+    volume, skip = _position_size(s, info, pip, sl_pips, acct["equity"])
+    if skip or volume <= 0:
+        log.info("entry skipped by capital management: %s", skip)
+        return
+
+    log.info(
+        "SMC entry %s %s @ %.5f SL %.5f TP %.5f vol=%.2f equity=%.2f conf=%d",
+        bias, symbol, price, sl, tp, volume, acct["equity"], confidence,
+    )
     result = _order_send({
-        "symbol": symbol, "side": bias, "volume": float(s.get("lot_size", 0.01)),
+        "symbol": symbol, "side": bias, "volume": volume,
         "sl": sl, "tp": tp, "comment": f"smc-{s['name'][:16]}",
     })
     if result.get("retcode") == mt5.TRADE_RETCODE_DONE:
