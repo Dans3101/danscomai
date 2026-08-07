@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+import math
 import logging
 import threading
 from datetime import datetime, timezone, time as dtime
@@ -63,7 +64,10 @@ def _symbol_allowed(sym: str) -> bool:
 # In-memory per-strategy state (cooldowns, daily counters, loss streaks).
 _STATE: dict[str, dict[str, Any]] = {}
 _DAY_KEY: str = ""
-_DAY_STATS: dict[str, Any] = {"trades": 0, "pnl": 0.0, "losses_streak": 0}
+_DAY_STATS: dict[str, Any] = {"trades": 0, "pnl": 0.0, "losses_streak": 0, "start_equity": 0.0}
+
+# Symbols whose live bid/ask we stream to the dashboard (positions + strategies).
+_TICK_SYMBOLS: set[str] = set()
 
 # Pluggable MT5 backend: remote (Windows Companion), native (Windows), simulator.
 # See bridge/mt5_client.py.
@@ -190,7 +194,32 @@ def collect_state() -> dict[str, Any]:
             "closed_at": iso(d.time),
         })
     payload["closed_trades"] = closed
+    payload["ticks"] = collect_ticks(positions)
     return payload
+
+
+def collect_ticks(positions) -> list[dict[str, Any]]:
+    """Latest bid/ask for every symbol we care about (max 20)."""
+    symbols = {p.symbol for p in positions} | set(_TICK_SYMBOLS)
+    out: list[dict[str, Any]] = []
+    for sym in list(symbols)[:20]:
+        try:
+            mt5.symbol_select(sym, True)
+            t = mt5.symbol_info_tick(sym)
+            info = mt5.symbol_info(sym)
+            if not t:
+                continue
+            point = float(getattr(info, "point", 0) or 0) or 0.01
+            out.append({
+                "symbol": sym,
+                "bid": float(t.bid),
+                "ask": float(t.ask),
+                "spread_points": round((float(t.ask) - float(t.bid)) / point, 1),
+                "digits": int(getattr(info, "digits", 2) or 2),
+            })
+        except Exception:  # noqa: BLE001
+            continue
+    return out
 
 
 def _order_type_name(t: int) -> str:
@@ -303,7 +332,10 @@ def evaluate_strategies() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if today != _DAY_KEY:
         _DAY_KEY = today
-        _DAY_STATS = {"trades": 0, "pnl": 0.0, "losses_streak": 0}
+        _DAY_STATS = {
+            "trades": 0, "pnl": 0.0, "losses_streak": 0,
+            "start_equity": _account_state()["equity"],
+        }
 
     try:
         r = httpx.get(STRAT_URL, headers=HDRS, params={"account_id": ACCOUNT_ID}, timeout=10)
@@ -317,10 +349,12 @@ def evaluate_strategies() -> None:
     _manage_open_positions(strategies)
 
     for s in strategies:
-        if s.get("rule_type") != "smc_confluence" or not s.get("enabled"):
-            continue
         if not _symbol_allowed(s.get("symbol", "")):
             log.info("skipping %s: only XAUUSD is supported", s.get("symbol"))
+            continue
+        # Stream live prices for every configured gold symbol, whatever the rule.
+        _TICK_SYMBOLS.add(s["symbol"])
+        if s.get("rule_type") != "smc_confluence" or not s.get("enabled"):
             continue
         try:
             _evaluate_smc(s)
@@ -495,6 +529,91 @@ def _correlated_open(side: str, symbol: str) -> bool:
     return False
 
 
+# ---------- capital management (micro-account safe) ----------
+
+def _lot_bounds(info) -> tuple[float, float, float]:
+    vmin = float(getattr(info, "volume_min", 0.01) or 0.01)
+    vmax = float(getattr(info, "volume_max", 100.0) or 100.0)
+    step = float(getattr(info, "volume_step", 0.01) or 0.01)
+    return vmin, vmax, step
+
+
+def _round_to_step(volume: float, step: float) -> float:
+    if step <= 0:
+        return round(volume, 2)
+    return round(math.floor(volume / step + 1e-9) * step, 8)
+
+
+def _money_per_pip(info, pip: float) -> float:
+    """Account-currency value of one pip for a 1.00 lot position."""
+    tick_value = float(getattr(info, "trade_tick_value", 0) or 0)
+    tick_size = float(getattr(info, "trade_tick_size", 0) or 0) or float(getattr(info, "point", 0) or 0)
+    if tick_value <= 0 or tick_size <= 0:
+        return 0.0
+    return tick_value * (pip / tick_size)
+
+
+def _account_state() -> dict[str, float]:
+    info = mt5.account_info()
+    if not info:
+        return {"equity": 0.0, "balance": 0.0, "margin": 0.0, "free_margin": 0.0}
+    return {
+        "equity": float(info.equity or 0),
+        "balance": float(info.balance or 0),
+        "margin": float(info.margin or 0),
+        "free_margin": float(info.margin_free or 0),
+    }
+
+
+def _capital_guard(s: dict[str, Any], acct: dict[str, float]) -> str | None:
+    """Return a blocking reason, or None when it is safe to open a trade."""
+    equity = acct["equity"]
+    min_equity = float(s.get("min_equity") or 0)
+    if min_equity and equity < min_equity:
+        return f"equity {equity:.2f} below floor {min_equity:.2f}"
+
+    start = float(_DAY_STATS.get("start_equity") or 0)
+    dl_pct = float(s.get("daily_loss_percent") or 0)
+    if start > 0 and dl_pct > 0 and equity <= start * (1 - dl_pct / 100.0):
+        return f"daily loss cap hit ({dl_pct}% of {start:.2f})"
+
+    max_margin_pct = float(s.get("max_margin_percent") or 0)
+    if max_margin_pct > 0 and equity > 0 and (acct["margin"] / equity) * 100 >= max_margin_pct:
+        return f"margin usage {(acct['margin'] / equity) * 100:.1f}% >= {max_margin_pct}%"
+    return None
+
+
+def _position_size(s: dict[str, Any], info, pip: float, sl_pips: float, equity: float) -> tuple[float, str | None]:
+    """Risk-based lot size. Returns (volume, skip_reason)."""
+    vmin, vmax, step = _lot_bounds(info)
+    hard_max = min(vmax, float(s.get("max_lot") or vmax))
+
+    if not bool(s.get("use_risk_sizing", True)):
+        vol = _round_to_step(min(float(s.get("lot_size") or vmin), hard_max), step)
+        return (max(vol, vmin), None)
+
+    risk_pct = float(s.get("risk_percent") or 1.0)
+    risk_money = equity * risk_pct / 100.0
+    per_pip = _money_per_pip(info, pip)
+    if per_pip <= 0 or sl_pips <= 0 or risk_money <= 0:
+        return (0.0, "cannot compute pip value / risk")
+
+    raw = risk_money / (sl_pips * per_pip)
+    vol = _round_to_step(min(raw, hard_max), step)
+
+    if vol < vmin:
+        # Smallest tradeable lot would risk more than planned. Allow it only
+        # while the real risk stays inside the absolute ceiling (2x the
+        # configured risk, never more than 10% of equity) — this is what keeps
+        # a $15 account alive instead of blowing it on one trade.
+        risk_at_min = vmin * sl_pips * per_pip
+        ceiling = min(equity * min(risk_pct * 2, 10.0) / 100.0, equity)
+        if risk_at_min > ceiling:
+            return (0.0, f"min lot {vmin} risks {risk_at_min:.2f} > allowed {ceiling:.2f}")
+        vol = vmin
+    return (vol, None)
+
+
 def _evaluate_smc(s: dict[str, Any]) -> None:
     symbol = s["symbol"]
     p = s.get("rule_params") or {}
@@ -502,6 +621,12 @@ def _evaluate_smc(s: dict[str, Any]) -> None:
 
     # 33/35/36 daily limits
     if s.get("max_daily_loss") and _DAY_STATS["pnl"] <= -abs(float(s["max_daily_loss"])):
+        return
+    # Capital protection (equity floor, daily drawdown %, margin usage)
+    acct = _account_state()
+    blocked = _capital_guard(s, acct)
+    if blocked:
+        log.info("capital guard: %s", blocked)
         return
     max_trades_day = int(p.get("max_trades_day", 20))
     if _DAY_STATS["trades"] >= max_trades_day:
@@ -641,9 +766,17 @@ def _evaluate_smc(s: dict[str, Any]) -> None:
     sl = price - sl_pips * pip if bias == "buy" else price + sl_pips * pip
     tp = price + tp_pips * pip if bias == "buy" else price - tp_pips * pip
 
-    log.info("SMC entry %s %s @ %.5f SL %.5f TP %.5f conf=%d", bias, symbol, price, sl, tp, confidence)
+    volume, skip = _position_size(s, info, pip, sl_pips, acct["equity"])
+    if skip or volume <= 0:
+        log.info("entry skipped by capital management: %s", skip)
+        return
+
+    log.info(
+        "SMC entry %s %s @ %.5f SL %.5f TP %.5f vol=%.2f equity=%.2f conf=%d",
+        bias, symbol, price, sl, tp, volume, acct["equity"], confidence,
+    )
     result = _order_send({
-        "symbol": symbol, "side": bias, "volume": float(s.get("lot_size", 0.01)),
+        "symbol": symbol, "side": bias, "volume": volume,
         "sl": sl, "tp": tp, "comment": f"smc-{s['name'][:16]}",
     })
     if result.get("retcode") == mt5.TRADE_RETCODE_DONE:

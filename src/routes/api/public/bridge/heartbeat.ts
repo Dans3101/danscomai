@@ -74,6 +74,18 @@ const Payload = z.object({
       }),
     )
     .optional(),
+  ticks: z
+    .array(
+      z.object({
+        symbol: z.string(),
+        bid: z.number().nullable().optional(),
+        ask: z.number().nullable().optional(),
+        spread_points: z.number().nullable().optional(),
+        digits: z.number().int().nullable().optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
   logs: z
     .array(
       z.object({
@@ -163,6 +175,22 @@ export const Route = createFileRoute("/api/public/bridge/heartbeat")({
               p.closed_trades.map((t) => ({ user_id: userId, account_id: account.id, ...t })),
               { onConflict: "account_id,ticket" },
             );
+        }
+
+        if (p.ticks && p.ticks.length) {
+          await supabaseAdmin.from("market_ticks").upsert(
+            p.ticks.map((t) => ({
+              user_id: userId,
+              account_id: account.id,
+              symbol: t.symbol,
+              bid: t.bid ?? null,
+              ask: t.ask ?? null,
+              spread_points: t.spread_points ?? null,
+              digits: t.digits ?? null,
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: "account_id,symbol" },
+          );
         }
 
         if (p.logs && p.logs.length) {

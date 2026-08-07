@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 import { Activity, Wifi, WifiOff } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { TradePanel } from "@/components/TradePanel";
+import { sendBridgeCommand } from "@/lib/mt5.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -31,6 +35,10 @@ type Trade = {
   id: string; ticket: number; symbol: string; side: string; volume: number;
   profit: number | null; closed_at: string | null;
 };
+type Tick = {
+  symbol: string; bid: number | null; ask: number | null;
+  spread_points: number | null; updated_at: string;
+};
 
 function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -39,6 +47,8 @@ function DashboardPage() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [history, setHistory] = useState<Trade[]>([]);
+  const [ticks, setTicks] = useState<Tick[]>([]);
+  const send = useServerFn(sendBridgeCommand);
 
   // load accounts once
   useEffect(() => {
@@ -71,7 +81,7 @@ function DashboardPage() {
     let cancelled = false;
 
     const loadAll = async () => {
-      const [snap, pos, ord, hist] = await Promise.all([
+      const [snap, pos, ord, hist, tk] = await Promise.all([
         supabase
           .from("account_snapshots")
           .select("*")
@@ -87,12 +97,14 @@ function DashboardPage() {
           .eq("account_id", selected)
           .order("closed_at", { ascending: false })
           .limit(25),
+        supabase.from("market_ticks").select("*").eq("account_id", selected),
       ]);
       if (cancelled) return;
       setSnapshot((snap.data as Snapshot | null) ?? null);
       setPositions((pos.data as Position[]) ?? []);
       setOrders((ord.data as Order[]) ?? []);
       setHistory((hist.data as Trade[]) ?? []);
+      setTicks((tk.data as Tick[]) ?? []);
     };
     loadAll();
 
@@ -117,6 +129,17 @@ function DashboardPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "trade_history", filter: `account_id=eq.${selected}` },
         loadAll,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "market_ticks", filter: `account_id=eq.${selected}` },
+        (p) =>
+          setTicks((prev) => {
+            const t = p.new as Tick;
+            if (!t?.symbol) return prev;
+            const rest = prev.filter((x) => x.symbol !== t.symbol);
+            return [...rest, t];
+          }),
       )
       .subscribe();
 
@@ -153,6 +176,16 @@ function DashboardPage() {
     n == null ? "—" : n.toLocaleString(undefined, { maximumFractionDigits: d });
 
   const connected = acct?.connection_status === "connected";
+  const gold = ticks.find((t) => t.symbol.toUpperCase().startsWith("XAU")) ?? ticks[0];
+
+  const closePosition = async (ticket: number) => {
+    try {
+      await send({ data: { account_id: selected!, command: "close", payload: { ticket } } });
+      toast.success(`Close sent for #${ticket}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to queue close");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -194,12 +227,34 @@ function DashboardPage() {
         <Stat label="Margin level" value={snapshot?.margin_level != null ? `${fmtNum(snapshot.margin_level)}%` : "—"} />
       </div>
 
+      {ticks.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {ticks.map((t) => (
+            <div key={t.symbol} className="rounded-lg border border-border bg-card px-4 py-3">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="uppercase tracking-wider">{t.symbol}</span>
+                <span>spread {fmtNum(t.spread_points, 1)}</span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-3 tabular-nums">
+                <span className="text-lg font-semibold text-destructive">{fmtNum(t.bid, 3)}</span>
+                <span className="text-lg font-semibold text-primary">{fmtNum(t.ask, 3)}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                updated {formatDistanceToNow(new Date(t.updated_at))} ago
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selected && <TradePanel accountId={selected} bid={gold?.bid ?? null} ask={gold?.ask ?? null} />}
+
       <Section title={`Open positions (${positions.length})`}>
         {positions.length === 0 ? (
           <Empty>No open positions.</Empty>
         ) : (
           <Table
-            head={["Ticket", "Symbol", "Side", "Vol", "Open", "Current", "SL", "TP", "P/L"]}
+            head={["Ticket", "Symbol", "Side", "Vol", "Open", "Current", "SL", "TP", "P/L", ""]}
             rows={positions.map((p) => [
               p.ticket,
               p.symbol,
@@ -212,6 +267,13 @@ function DashboardPage() {
               <span key="pl" className={(p.profit ?? 0) >= 0 ? "text-primary" : "text-destructive"}>
                 {fmtMoney(p.profit)}
               </span>,
+              <button
+                key="close"
+                onClick={() => closePosition(p.ticket)}
+                className="h-7 px-2.5 rounded-md border border-border text-xs hover:bg-destructive/10 hover:text-destructive"
+              >
+                Close
+              </button>,
             ])}
           />
         )}
