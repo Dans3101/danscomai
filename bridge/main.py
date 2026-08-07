@@ -332,7 +332,10 @@ def evaluate_strategies() -> None:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if today != _DAY_KEY:
         _DAY_KEY = today
-        _DAY_STATS = {"trades": 0, "pnl": 0.0, "losses_streak": 0}
+        _DAY_STATS = {
+            "trades": 0, "pnl": 0.0, "losses_streak": 0,
+            "start_equity": _account_state()["equity"],
+        }
 
     try:
         r = httpx.get(STRAT_URL, headers=HDRS, params={"account_id": ACCOUNT_ID}, timeout=10)
@@ -351,6 +354,7 @@ def evaluate_strategies() -> None:
         if not _symbol_allowed(s.get("symbol", "")):
             log.info("skipping %s: only XAUUSD is supported", s.get("symbol"))
             continue
+        _TICK_SYMBOLS.add(s["symbol"])
         try:
             _evaluate_smc(s)
         except Exception as e:
