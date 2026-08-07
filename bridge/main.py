@@ -617,6 +617,12 @@ def _evaluate_smc(s: dict[str, Any]) -> None:
     # 33/35/36 daily limits
     if s.get("max_daily_loss") and _DAY_STATS["pnl"] <= -abs(float(s["max_daily_loss"])):
         return
+    # Capital protection (equity floor, daily drawdown %, margin usage)
+    acct = _account_state()
+    blocked = _capital_guard(s, acct)
+    if blocked:
+        log.info("capital guard: %s", blocked)
+        return
     max_trades_day = int(p.get("max_trades_day", 20))
     if _DAY_STATS["trades"] >= max_trades_day:
         return
