@@ -64,7 +64,10 @@ def _symbol_allowed(sym: str) -> bool:
 # In-memory per-strategy state (cooldowns, daily counters, loss streaks).
 _STATE: dict[str, dict[str, Any]] = {}
 _DAY_KEY: str = ""
-_DAY_STATS: dict[str, Any] = {"trades": 0, "pnl": 0.0, "losses_streak": 0}
+_DAY_STATS: dict[str, Any] = {"trades": 0, "pnl": 0.0, "losses_streak": 0, "start_equity": 0.0}
+
+# Symbols whose live bid/ask we stream to the dashboard (positions + strategies).
+_TICK_SYMBOLS: set[str] = set()
 
 # Pluggable MT5 backend: remote (Windows Companion), native (Windows), simulator.
 # See bridge/mt5_client.py.
