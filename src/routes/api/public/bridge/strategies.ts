@@ -34,7 +34,9 @@ export const Route = createFileRoute("/api/public/bridge/strategies")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { data, error } = await supabaseAdmin
           .from("strategies")
-          .select("id, name, symbol, timeframe, rule_type, rule_params, lot_size, stop_loss_pips, take_profit_pips, trailing_stop_pips, max_daily_loss, max_open_trades, enabled")
+          .select(
+            "id, name, symbol, timeframe, rule_type, rule_params, lot_size, stop_loss_pips, take_profit_pips, trailing_stop_pips, max_daily_loss, max_open_trades, enabled, use_risk_sizing, risk_percent, max_lot, min_equity, daily_loss_percent, max_margin_percent",
+          )
           .eq("account_id", accountId)
           .eq("enabled", true);
         if (error) return json({ error: error.message }, 500);
