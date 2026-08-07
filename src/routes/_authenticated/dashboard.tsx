@@ -176,6 +176,16 @@ function DashboardPage() {
     n == null ? "—" : n.toLocaleString(undefined, { maximumFractionDigits: d });
 
   const connected = acct?.connection_status === "connected";
+  const gold = ticks.find((t) => t.symbol.toUpperCase().startsWith("XAU")) ?? ticks[0];
+
+  const closePosition = async (ticket: number) => {
+    try {
+      await send({ data: { account_id: selected!, command: "close", payload: { ticket } } });
+      toast.success(`Close sent for #${ticket}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to queue close");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -217,12 +227,34 @@ function DashboardPage() {
         <Stat label="Margin level" value={snapshot?.margin_level != null ? `${fmtNum(snapshot.margin_level)}%` : "—"} />
       </div>
 
+      {ticks.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {ticks.map((t) => (
+            <div key={t.symbol} className="rounded-lg border border-border bg-card px-4 py-3">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="uppercase tracking-wider">{t.symbol}</span>
+                <span>spread {fmtNum(t.spread_points, 1)}</span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-3 tabular-nums">
+                <span className="text-lg font-semibold text-destructive">{fmtNum(t.bid, 3)}</span>
+                <span className="text-lg font-semibold text-primary">{fmtNum(t.ask, 3)}</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">
+                updated {formatDistanceToNow(new Date(t.updated_at))} ago
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selected && <TradePanel accountId={selected} bid={gold?.bid ?? null} ask={gold?.ask ?? null} />}
+
       <Section title={`Open positions (${positions.length})`}>
         {positions.length === 0 ? (
           <Empty>No open positions.</Empty>
         ) : (
           <Table
-            head={["Ticket", "Symbol", "Side", "Vol", "Open", "Current", "SL", "TP", "P/L"]}
+            head={["Ticket", "Symbol", "Side", "Vol", "Open", "Current", "SL", "TP", "P/L", ""]}
             rows={positions.map((p) => [
               p.ticket,
               p.symbol,
@@ -235,6 +267,13 @@ function DashboardPage() {
               <span key="pl" className={(p.profit ?? 0) >= 0 ? "text-primary" : "text-destructive"}>
                 {fmtMoney(p.profit)}
               </span>,
+              <button
+                key="close"
+                onClick={() => closePosition(p.ticket)}
+                className="h-7 px-2.5 rounded-md border border-border text-xs hover:bg-destructive/10 hover:text-destructive"
+              >
+                Close
+              </button>,
             ])}
           />
         )}
