@@ -182,6 +182,12 @@ function StrategyForm({ accounts, onClose, onSaved }: { accounts: Account[]; onC
       trailing_stop_pips: numOrNull(fd.get("trailing_stop_pips")),
       max_daily_loss: numOrNull(fd.get("max_daily_loss")),
       max_open_trades: Number(fd.get("max_open_trades") ?? 1),
+      use_risk_sizing: fd.get("use_risk_sizing") === "on",
+      risk_percent: Number(fd.get("risk_percent") ?? 1),
+      max_lot: Number(fd.get("max_lot") ?? 0.1),
+      min_equity: Number(fd.get("min_equity") ?? 5),
+      daily_loss_percent: Number(fd.get("daily_loss_percent") ?? 5),
+      max_margin_percent: Number(fd.get("max_margin_percent") ?? 20),
       enabled: false,
     });
     if (error) return toast.error(error.message);
@@ -253,6 +259,25 @@ function StrategyForm({ accounts, onClose, onSaved }: { accounts: Account[]; onC
             <Field name="take_profit_pips" label="Take profit (pips)" type="number" step="any" />
             <Field name="trailing_stop_pips" label="Trailing stop (pips)" type="number" step="any" />
           </div>
+        </div>
+
+        <div className="pt-2 border-t border-border">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Capital management</div>
+          <label className="flex items-center gap-2 text-sm mb-3">
+            <input type="checkbox" name="use_risk_sizing" defaultChecked className="h-4 w-4 rounded border-input" />
+            Auto lot sizing from risk % (recommended for small accounts)
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            <Field name="risk_percent" label="Risk per trade (%)" type="number" step="0.1" defaultValue="1" />
+            <Field name="max_lot" label="Max lot" type="number" step="0.01" defaultValue="0.01" />
+            <Field name="min_equity" label="Equity floor ($)" type="number" step="any" defaultValue="5" />
+            <Field name="daily_loss_percent" label="Daily drawdown cap (%)" type="number" step="0.5" defaultValue="5" />
+            <Field name="max_margin_percent" label="Max margin used (%)" type="number" step="1" defaultValue="20" />
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            With auto sizing the bot risks only the configured % of live equity per trade and refuses a trade when the
+            broker minimum lot would risk more than twice that (never above 10% of equity) — a $15 account stays safe.
+          </p>
         </div>
 
         <div className="flex gap-2 pt-2">
