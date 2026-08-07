@@ -81,7 +81,7 @@ function DashboardPage() {
     let cancelled = false;
 
     const loadAll = async () => {
-      const [snap, pos, ord, hist] = await Promise.all([
+      const [snap, pos, ord, hist, tk] = await Promise.all([
         supabase
           .from("account_snapshots")
           .select("*")
@@ -97,12 +97,14 @@ function DashboardPage() {
           .eq("account_id", selected)
           .order("closed_at", { ascending: false })
           .limit(25),
+        supabase.from("market_ticks").select("*").eq("account_id", selected),
       ]);
       if (cancelled) return;
       setSnapshot((snap.data as Snapshot | null) ?? null);
       setPositions((pos.data as Position[]) ?? []);
       setOrders((ord.data as Order[]) ?? []);
       setHistory((hist.data as Trade[]) ?? []);
+      setTicks((tk.data as Tick[]) ?? []);
     };
     loadAll();
 
@@ -127,6 +129,17 @@ function DashboardPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "trade_history", filter: `account_id=eq.${selected}` },
         loadAll,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "market_ticks", filter: `account_id=eq.${selected}` },
+        (p) =>
+          setTicks((prev) => {
+            const t = p.new as Tick;
+            if (!t?.symbol) return prev;
+            const rest = prev.filter((x) => x.symbol !== t.symbol);
+            return [...rest, t];
+          }),
       )
       .subscribe();
 
