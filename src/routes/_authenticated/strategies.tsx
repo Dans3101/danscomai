@@ -14,6 +14,8 @@ type Strategy = {
   lot_size: number; stop_loss_pips: number | null; take_profit_pips: number | null;
   trailing_stop_pips: number | null; max_daily_loss: number | null;
   max_open_trades: number; enabled: boolean;
+  use_risk_sizing: boolean; risk_percent: number; max_lot: number;
+  min_equity: number; daily_loss_percent: number; max_margin_percent: number;
 };
 type Account = { id: string; label: string; login: string };
 
@@ -120,12 +122,15 @@ function StrategiesPage() {
                 </button>
               </div>
               <div className="mt-3 grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
-                <Meta label="Lot">{s.lot_size}</Meta>
+                <Meta label="Lot">{s.use_risk_sizing ? `auto · ${s.risk_percent}% risk` : s.lot_size}</Meta>
                 <Meta label="SL (pips)">{s.stop_loss_pips ?? "—"}</Meta>
                 <Meta label="TP (pips)">{s.take_profit_pips ?? "—"}</Meta>
                 <Meta label="Trailing">{s.trailing_stop_pips ?? "—"}</Meta>
-                <Meta label="Daily loss cap">{s.max_daily_loss ?? "—"}</Meta>
+                <Meta label="Daily loss">{s.daily_loss_percent}% / {s.max_daily_loss ?? "—"}</Meta>
                 <Meta label="Max open">{s.max_open_trades}</Meta>
+                <Meta label="Max lot">{s.max_lot}</Meta>
+                <Meta label="Equity floor">{s.min_equity}</Meta>
+                <Meta label="Max margin">{s.max_margin_percent}%</Meta>
               </div>
             </div>
           );
