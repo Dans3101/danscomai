@@ -524,6 +524,91 @@ def _correlated_open(side: str, symbol: str) -> bool:
     return False
 
 
+# ---------- capital management (micro-account safe) ----------
+
+def _lot_bounds(info) -> tuple[float, float, float]:
+    vmin = float(getattr(info, "volume_min", 0.01) or 0.01)
+    vmax = float(getattr(info, "volume_max", 100.0) or 100.0)
+    step = float(getattr(info, "volume_step", 0.01) or 0.01)
+    return vmin, vmax, step
+
+
+def _round_to_step(volume: float, step: float) -> float:
+    if step <= 0:
+        return round(volume, 2)
+    return round(math.floor(volume / step + 1e-9) * step, 8)
+
+
+def _money_per_pip(info, pip: float) -> float:
+    """Account-currency value of one pip for a 1.00 lot position."""
+    tick_value = float(getattr(info, "trade_tick_value", 0) or 0)
+    tick_size = float(getattr(info, "trade_tick_size", 0) or 0) or float(getattr(info, "point", 0) or 0)
+    if tick_value <= 0 or tick_size <= 0:
+        return 0.0
+    return tick_value * (pip / tick_size)
+
+
+def _account_state() -> dict[str, float]:
+    info = mt5.account_info()
+    if not info:
+        return {"equity": 0.0, "balance": 0.0, "margin": 0.0, "free_margin": 0.0}
+    return {
+        "equity": float(info.equity or 0),
+        "balance": float(info.balance or 0),
+        "margin": float(info.margin or 0),
+        "free_margin": float(info.margin_free or 0),
+    }
+
+
+def _capital_guard(s: dict[str, Any], acct: dict[str, float]) -> str | None:
+    """Return a blocking reason, or None when it is safe to open a trade."""
+    equity = acct["equity"]
+    min_equity = float(s.get("min_equity") or 0)
+    if min_equity and equity < min_equity:
+        return f"equity {equity:.2f} below floor {min_equity:.2f}"
+
+    start = float(_DAY_STATS.get("start_equity") or 0)
+    dl_pct = float(s.get("daily_loss_percent") or 0)
+    if start > 0 and dl_pct > 0 and equity <= start * (1 - dl_pct / 100.0):
+        return f"daily loss cap hit ({dl_pct}% of {start:.2f})"
+
+    max_margin_pct = float(s.get("max_margin_percent") or 0)
+    if max_margin_pct > 0 and equity > 0 and (acct["margin"] / equity) * 100 >= max_margin_pct:
+        return f"margin usage {(acct['margin'] / equity) * 100:.1f}% >= {max_margin_pct}%"
+    return None
+
+
+def _position_size(s: dict[str, Any], info, pip: float, sl_pips: float, equity: float) -> tuple[float, str | None]:
+    """Risk-based lot size. Returns (volume, skip_reason)."""
+    vmin, vmax, step = _lot_bounds(info)
+    hard_max = min(vmax, float(s.get("max_lot") or vmax))
+
+    if not bool(s.get("use_risk_sizing", True)):
+        vol = _round_to_step(min(float(s.get("lot_size") or vmin), hard_max), step)
+        return (max(vol, vmin), None)
+
+    risk_pct = float(s.get("risk_percent") or 1.0)
+    risk_money = equity * risk_pct / 100.0
+    per_pip = _money_per_pip(info, pip)
+    if per_pip <= 0 or sl_pips <= 0 or risk_money <= 0:
+        return (0.0, "cannot compute pip value / risk")
+
+    raw = risk_money / (sl_pips * per_pip)
+    vol = _round_to_step(min(raw, hard_max), step)
+
+    if vol < vmin:
+        # Smallest tradeable lot would risk more than planned. Allow it only
+        # while the real risk stays inside the absolute ceiling (2x the
+        # configured risk, never more than 10% of equity) — this is what keeps
+        # a $15 account alive instead of blowing it on one trade.
+        risk_at_min = vmin * sl_pips * per_pip
+        ceiling = min(equity * min(risk_pct * 2, 10.0) / 100.0, equity)
+        if risk_at_min > ceiling:
+            return (0.0, f"min lot {vmin} risks {risk_at_min:.2f} > allowed {ceiling:.2f}")
+        vol = vmin
+    return (vol, None)
+
+
 def _evaluate_smc(s: dict[str, Any]) -> None:
     symbol = s["symbol"]
     p = s.get("rule_params") or {}
