@@ -349,12 +349,13 @@ def evaluate_strategies() -> None:
     _manage_open_positions(strategies)
 
     for s in strategies:
-        if s.get("rule_type") != "smc_confluence" or not s.get("enabled"):
-            continue
         if not _symbol_allowed(s.get("symbol", "")):
             log.info("skipping %s: only XAUUSD is supported", s.get("symbol"))
             continue
+        # Stream live prices for every configured gold symbol, whatever the rule.
         _TICK_SYMBOLS.add(s["symbol"])
+        if s.get("rule_type") != "smc_confluence" or not s.get("enabled"):
+            continue
         try:
             _evaluate_smc(s)
         except Exception as e:
