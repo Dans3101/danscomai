@@ -177,10 +177,6 @@ export const Route = createFileRoute("/api/public/bridge/heartbeat")({
             );
         }
 
-        if (p.logs && p.logs.length) {
-          // fallthrough below
-        }
-
         if (p.ticks && p.ticks.length) {
           await supabaseAdmin.from("market_ticks").upsert(
             p.ticks.map((t) => ({
