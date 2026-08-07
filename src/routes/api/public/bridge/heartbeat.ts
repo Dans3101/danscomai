@@ -178,6 +178,26 @@ export const Route = createFileRoute("/api/public/bridge/heartbeat")({
         }
 
         if (p.logs && p.logs.length) {
+          // fallthrough below
+        }
+
+        if (p.ticks && p.ticks.length) {
+          await supabaseAdmin.from("market_ticks").upsert(
+            p.ticks.map((t) => ({
+              user_id: userId,
+              account_id: account.id,
+              symbol: t.symbol,
+              bid: t.bid ?? null,
+              ask: t.ask ?? null,
+              spread_points: t.spread_points ?? null,
+              digits: t.digits ?? null,
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: "account_id,symbol" },
+          );
+        }
+
+        if (p.logs && p.logs.length) {
           await supabaseAdmin.from("activity_logs").insert(
             p.logs.map((l) => ({ user_id: userId, account_id: account.id, ...l })),
           );
