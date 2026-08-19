@@ -149,6 +149,90 @@ export type Database = {
           },
         ]
       }
+      broker_settings: {
+        Row: {
+          active_broker: string | null
+          auto_trading_enabled: boolean
+          created_at: string
+          live_confirmed_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_broker?: string | null
+          auto_trading_enabled?: boolean
+          created_at?: string
+          live_confirmed_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_broker?: string | null
+          auto_trading_enabled?: boolean
+          created_at?: string
+          live_confirmed_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      capital_accounts: {
+        Row: {
+          account_name: string | null
+          api_key_ciphertext: string
+          api_password_ciphertext: string
+          connection_status: string
+          created_at: string
+          currency: string | null
+          environment: string
+          gold_epic: string | null
+          gold_name: string | null
+          id: string
+          identifier: string
+          last_connected_at: string | null
+          last_error: string | null
+          remote_account_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_name?: string | null
+          api_key_ciphertext: string
+          api_password_ciphertext: string
+          connection_status?: string
+          created_at?: string
+          currency?: string | null
+          environment?: string
+          gold_epic?: string | null
+          gold_name?: string | null
+          id?: string
+          identifier: string
+          last_connected_at?: string | null
+          last_error?: string | null
+          remote_account_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_name?: string | null
+          api_key_ciphertext?: string
+          api_password_ciphertext?: string
+          connection_status?: string
+          created_at?: string
+          currency?: string | null
+          environment?: string
+          gold_epic?: string | null
+          gold_name?: string | null
+          id?: string
+          identifier?: string
+          last_connected_at?: string | null
+          last_error?: string | null
+          remote_account_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       market_ticks: {
         Row: {
           account_id: string
