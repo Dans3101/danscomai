@@ -74,11 +74,11 @@ def _http_process_request(connection, request):
             "service": "mt5-render-engine",
             "companions": len(hub.REG.sessions),
         }).encode()
-        return connection.respond(200, body)
+        return connection.respond(200, body.decode())
     if path == "/status":
         body = json.dumps({"ok": True, **hub.REG.snapshot()}).encode()
-        return connection.respond(200, body)
-    return connection.respond(404, b'{"ok": false, "error": "not found"}')
+        return connection.respond(200, body.decode())
+    return connection.respond(404, '{"ok": false, "error": "not found"}')
 
 
 def _run_worker() -> None:
