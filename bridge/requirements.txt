@@ -2,7 +2,9 @@
 # Linux talks to MT5 exclusively through the Windows Companion Service
 # (persistent WebSocket). No Wine, no mt5linux, no RPyC.
 MetaTrader5>=5.0.45 ; sys_platform == "win32"
-websockets>=12.0
+# >=13 is required so the WebSocket server can also answer plain HTTP
+# health probes (Render health checks) via process_request.
+websockets>=13.0
 httpx>=0.27
 python-dotenv>=1.0
 pydantic>=2.7
