@@ -272,3 +272,100 @@ back to **Connected** on its own.
 5. Watch **Activity** for `SMC entry`, `AI veto`, and capital-guard messages.
 
 > Run at least a few sessions on a demo account before going live.
+
+## 15. Deploying the engine on Render (no Ubuntu VPS needed)
+
+Render can replace the **Ubuntu** machine entirely: it hosts the Companion Hub
+and the strategy/risk engine as one stateless web service. The **Windows VPS
+stays exactly as it is** — it still runs MetaTrader 5 natively and connects
+out to Render, so no inbound ports are needed on Windows and no Wine anywhere.
+
+```
+ Dashboard (Lovable Cloud)  ◀── heartbeat / snapshots / trade history ──┐
+                                                                        │
+ Render (danscom-mt5-engine)  ◀── persistent wss:// (outbound) ── Windows VPS
+   · companion hub  (WebSocket on $PORT, TLS by Render)                 │   MT5 terminal
+   · bridge worker  (SMC engine + capital management)                  └─── companion.py
+```
+
+**What Render does and does not hold**
+
+- It runs only the automated-trading logic for **one bot (XAUUSD)** and relays
+  orders to the Windows Companion.
+- It stores **nothing**: no database, no persistent disk, no durable files.
+  Logs and health files go to `/tmp` and are wiped on every deploy/restart.
+  Account snapshots, positions, trade history, strategies and service logs
+  all live in the dashboard backend, exactly as before.
+- Everything durable is fetched live from `APP_BASE_URL` and pushed back on
+  every heartbeat, so a restart loses nothing.
+
+### 15.1 Deploy
+
+1. Push this repository to GitHub, then in Render: **New + → Blueprint** and
+   pick the repo. It reads `render.yaml` and creates one web service
+   (`danscom-mt5-engine`) from `Dockerfile.render`.
+2. Fill the prompted environment variables (all `sync: false` in
+   `render.yaml`):
+
+| Variable | Value |
+| --- | --- |
+| `APP_BASE_URL` | your dashboard URL, e.g. `https://danscomai.lovable.app` |
+| `ACCOUNT_ID` | UUID of the MT5 account row (Dashboard → Accounts → Bridge config) |
+| `BRIDGE_TOKEN` | the same bridge token the Windows Companion uses |
+| `MT5_LOGIN` / `MT5_PASSWORD` / `MT5_SERVER` | MT5 credentials (relayed to the Companion at login) |
+
+   No other settings are needed: `PORT` is injected by Render and the hub
+   binds to it automatically; health checks use `/health` on the same port.
+
+3. Use at least the **Starter** plan. The free tier sleeps after ~15 minutes
+   of idle traffic, which would drop the Companion's WebSocket and pause
+   trading — not acceptable for a 24/7 bot.
+4. Deploy. Verify: open `https://<service>.onrender.com/health` — it must
+   return `{"ok": true, "companions": 0}` (companions becomes `1` once
+   Windows connects).
+
+### 15.2 Point the Windows Companion at Render
+
+In `windows-companion/config.json` set:
+
+```json
+"backend_ws_url": "wss://danscom-mt5-engine.onrender.com",
+```
+
+(keep `verify_tls: true` — Render serves a valid certificate; any path works).
+Then restart the service:
+
+```powershell
+Restart-Service MT5Companion
+Get-Content .\logs\companion.log -Tail 50 -Wait
+```
+
+`/health` on Render should now show `"companions": 1`, and the dashboard
+account flips to **Connected** with live balance/equity — same flow as the
+Ubuntu hub, nothing else changes.
+
+### 15.3 Behaviour to expect on Render
+
+- **Restarts are safe.** On every deploy/restart the Companion reconnects on
+  its own (exponential backoff up to 60 s), MT5 keeps running on Windows, and
+  the engine re-pulls strategies from the dashboard. Open positions are
+  re-synced from the terminal on the first heartbeat.
+- **Logs** are visible in the Render dashboard (Logs tab) and warnings/errors
+  are still forwarded to the dashboard's log viewer.
+- **Metrics** (`METRICS_ENABLED=0`) and Prometheus/Grafana are disabled in
+  this mode; Render's own logs and the dashboard log viewer are the sources.
+- **Costs:** Render bills the running service per month (Starter tier); the
+  Windows VPS is unchanged. No storage charges — nothing is stored.
+- **One bot only:** set exactly one `ACCOUNT_ID`. Additional accounts still
+  require the full Ubuntu setup (section 2) or a second Render service with
+  its own token.
+
+### 15.4 Troubleshooting on Render
+
+| Symptom | Fix |
+| --- | --- |
+| `/health` unreachable after deploy | check the Render **Events/Logs** tab; a missing env var (`APP_BASE_URL`, `ACCOUNT_ID`, `BRIDGE_TOKEN`) makes the container exit with a clear message |
+| Companion loops "connection refused" | the service was suspended (free tier) or crashed — upgrade the plan and check Logs |
+| `{"companions": 0}` but Windows says connected | wrong `BRIDGE_TOKEN` on either side, or the Companion is still pointed at the old Ubuntu URL |
+| Heartbeat errors in the log viewer | `APP_BASE_URL` must be the **published** dashboard URL and the bridge token must match the account row |
+

@@ -1,0 +1,47 @@
+# Render Blueprint — stateless MT5 trading engine (single XAUUSD bot).
+#
+# Deploys with "New +" -> "Blueprint" after connecting this repository.
+# The engine stores nothing: heartbeats, snapshots, trade history and
+# strategy config all live in the dashboard backend (APP_BASE_URL).
+services:
+  - type: web
+    name: danscom-mt5-engine
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    # Free tier sleeps after ~15 min idle and is NOT suitable for 24/7
+    # automated trading — use at least the Starter plan.
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Dashboard backend that owns all state, e.g. https://danscomai.lovable.app
+      - key: APP_BASE_URL
+        sync: false
+      # UUID of the MT5 account row from the dashboard (single bot).
+      - key: ACCOUNT_ID
+        sync: false
+      # Bridge token from the dashboard (also used by the Windows Companion).
+      - key: BRIDGE_TOKEN
+        sync: false
+      # MT5 credentials — passed through to the Windows Companion at login.
+      - key: MT5_LOGIN
+        sync: false
+      - key: MT5_PASSWORD
+        sync: false
+      - key: MT5_SERVER
+        sync: false
+      # Execution always goes through the Windows Companion on the VPS.
+      - key: MT5_BACKEND
+        value: remote
+      - key: HUB_RPC_PORT
+        value: "8766"
+      # Ephemeral-only paths — the container filesystem is wiped on deploy.
+      - key: LOG_DIR
+        value: /tmp/mt5-logs
+      - key: HEALTH_FILE
+        value: /tmp/mt5-bridge.health
+      - key: METRICS_ENABLED
+        value: "0"
+      - key: LOG_LEVEL
+        value: INFO

@@ -1,0 +1,24 @@
+# Stateless Render image for the MT5 trading engine.
+# Runs the Companion Hub (WebSocket for the Windows VPS) and the bridge
+# worker (strategy + risk logic) in one process. Nothing is persisted:
+# all durable data lives in the dashboard backend (Lovable Cloud).
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    LOG_LEVEL=INFO \
+    LOG_DIR=/tmp/mt5-logs \
+    HEALTH_FILE=/tmp/mt5-bridge.health \
+    METRICS_ENABLED=0
+
+WORKDIR /app
+
+COPY bridge/requirements.txt bridge/requirements.txt
+RUN pip install --no-cache-dir -r bridge/requirements.txt
+
+COPY bridge/ bridge/
+
+# Render injects $PORT and routes wss://<service>.onrender.com to it.
+EXPOSE 10000
+
+CMD ["python", "bridge/render_server.py"]
